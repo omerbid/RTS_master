@@ -1,0 +1,14 @@
+Level,TableId,XPRequired
+1,HeroXP_Prototype,0
+2,HeroXP_Prototype,120
+3,HeroXP_Prototype,260
+4,HeroXP_Prototype,420
+5,HeroXP_Prototype,500
+6,HeroXP_Prototype,650
+7,HeroXP_Prototype,850
+8,HeroXP_Prototype,1100
+9,HeroXP_Prototype,1300
+10,HeroXP_Prototype,1500
+15,HeroXP_Prototype,3000
+20,HeroXP_Prototype,5500
+25,HeroXP_Prototype,9000

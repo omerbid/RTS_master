@@ -1,0 +1,5 @@
+Name,Min,Max,Effect
+Broken,0,30,High retreat chance
+Normal,31,69,No modifier
+Inspired,70,89,Minor buff
+Heroic,90,100,Major buff

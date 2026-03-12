@@ -1,0 +1,62 @@
+﻿========================================
+ RTS_Monsters - P1 Tests
+========================================
+Definition of Done: Command radius enforced for new orders; persistent Move order; mouse-driven select and context order; camera pan only on keyboard.
+
+Total tests: 17
+
+[1/17] P1.1.1 - LMB on unit â€“ single selection
+    Expected: "Selection updates to that unit only (SetSelection); no other units selected"
+
+[2/17] P1.1.2 - Shift+LMB â€“ add to selection
+    Expected: "Both units selected (AddToSelection); Selection contains both"
+
+[3/17] P1.1.3 - LMB on ground â€“ clear selection
+    Expected: "Selection clears or resets (ClearSelection)"
+
+[4/17] P1.1.4 - Select Hero
+    Expected: "Hero selected; can issue orders as Issuer"
+
+[5/17] P1.2.1 - RMB on ground â€“ Move to units in range
+    Expected: "All units in range receive Move order to hit location; they start moving"
+
+[6/17] P1.2.2 - Units outside range do not get new order
+    Expected: "Only in-range unit gets Move; out-of-range unit does not get new order (keeps current if any)"
+
+[7/17] P1.2.3 - Order persists when leaving range
+    Expected: "Unit continues executing Move (order not auto-cancelled)"
+
+[8/17] P1.2.4 - New order only when in range
+    Expected: "Out of range: unit does not receive order; back in range: receives order"
+
+[9/17] P1.2.5 - Issuer is selected Hero
+    Expected: "No crash; optionally Hero receives Move (if implemented)"
+
+[10/17] P1.3.1 - RMB on enemy â€“ Attack
+    Expected: "Units in range receive Attack order (target); approach/attack per implementation"
+
+[11/17] P1.3.2 - Attack not given to units outside range
+    Expected: "Only in-range units receive Attack"
+
+[12/17] P1.4.1 - WASD / Arrows â€“ camera pan only
+    Expected: "Camera moves (pan); no unit control (no move, no selection)"
+
+[13/17] P1.4.2 - LMB / RMB mapped
+    Expected: "LMB = Select; Shift+LMB = Add Select; RMB = Context (Move/Attack)"
+
+[14/17] P1.4.3 - Trace â€“ ground vs actor
+    Expected: "Ground â†’ Move; friendly actor â†’ select/add; enemy actor â†’ Attack (if in scope)"
+
+[15/17] P1.5.1 - Hero CommandRadius 2500
+    Expected: "Value 2500 UU (or from data)"
+
+[16/17] P1.5.2 - Captain 1200 (if in P1)
+    Expected: "1200 UU; Issuer Captain commands only units within 1200"
+
+[17/17] P1.5.3 - Same faction required for order
+    Expected: "CanIssueOrderToUnit false; unit does not receive order on RMB"
+
+----------------------------------------
+Run these in PIE (or Automation) and mark pass/fail.
+Test file: C:\Users\shodi\Documents\Desktop\RTS_Monsters\.cursor\tests\P1_tests.yaml
+Automation filter: RTS_Monsters.P1

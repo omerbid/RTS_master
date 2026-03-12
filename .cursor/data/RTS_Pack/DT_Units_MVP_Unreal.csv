@@ -1,0 +1,11 @@
+RowName,Faction,UnitId,DisplayName,Role,PowerScale,HP,Damage,Range,AttackSpeed,Armor,MoveSpeed,MoraleBase,Upkeep,Special
+Militia,Humans,Militia,Militia,MeleeLight,1,100,10,0,1.0,0,420,60,1,None
+Swordsman,Humans,Swordsman,Swordsman,MeleeMedium,1,150,18,0,0.95,2,410,70,2,ShieldWall
+Archer,Humans,Archer,Archer,RangedLight,1,90,22,900,1.1,0,430,65,2,Ranged
+Knight,Humans,Knight,Knight,CavalryHeavy,1,220,30,0,0.9,4,520,80,4,Charge
+Thrall,Vampires,Thrall,Thrall,MeleeLight,2,120,20,0,1.05,1,440,75,2,LifeLeech
+Nightblade,Vampires,Nightblade,Nightblade,Assassin,2,180,35,0,1.15,1,480,85,4,StealthBurst
+BloodGuard,Vampires,BloodGuard,Blood Guard,Tank,2,260,40,0,0.85,5,400,90,5,FearAura
+PackHunter,Werewolves,PackHunter,Pack Hunter,MeleeSkirmisher,3,180,28,0,1.2,1,500,70,4,PackBonus
+AlphaWarrior,Werewolves,AlphaWarrior,Alpha Warrior,Bruiser,3,300,50,0,1.0,3,470,85,6,BerserkTrigger
+Shaman,Werewolves,Shaman,Shaman,Support,3,160,15,650,1.0,0,450,80,5,SpiritHowl

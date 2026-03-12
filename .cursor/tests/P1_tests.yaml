@@ -1,0 +1,123 @@
+# RTS_Monsters – P1 Command Radius + Orders + Input Tests
+# Sources: GDD.md, PLANNING_P1_command_and_orders.md, RTS_CHECKLIST_EPIC_VS_MVP.md, RTS_TESTS_P0_P1.md
+# Run: .\run_tests.ps1 -Phase P1
+
+phase: P1
+definition_of_done: "Command radius enforced for new orders; persistent Move order; mouse-driven select and context order; camera pan only on keyboard."
+
+tests:
+  # --- P1.1 Selection ---
+  - id: P1.1.1
+    group: Selection
+    title: LMB on unit – single selection
+    steps:
+      - "Left-click on a unit"
+    expected: "Selection updates to that unit only (SetSelection); no other units selected"
+  - id: P1.1.2
+    group: Selection
+    title: Shift+LMB – add to selection
+    steps:
+      - "Select one unit; Shift+click on second unit"
+    expected: "Both units selected (AddToSelection); Selection contains both"
+  - id: P1.1.3
+    group: Selection
+    title: LMB on ground – clear selection
+    steps:
+      - "Select unit; click on ground (no actor)"
+    expected: "Selection clears or resets (ClearSelection)"
+  - id: P1.1.4
+    group: Selection
+    title: Select Hero
+    steps:
+      - "LMB on Hero"
+    expected: "Hero selected; can issue orders as Issuer"
+
+  # --- P1.2 Orders – Move ---
+  - id: P1.2.1
+    group: OrdersMove
+    title: RMB on ground – Move to units in range
+    steps:
+      - "Select Hero + units; ensure all within 2500 UU"
+      - "RMB on ground"
+    expected: "All units in range receive Move order to hit location; they start moving"
+  - id: P1.2.2
+    group: OrdersMove
+    title: Units outside range do not get new order
+    steps:
+      - "Select Hero + one unit in range + one unit out of range"
+      - "RMB on ground"
+    expected: "Only in-range unit gets Move; out-of-range unit does not get new order (keeps current if any)"
+  - id: P1.2.3
+    group: OrdersMove
+    title: Order persists when leaving range
+    steps:
+      - "Give unit Move order"
+      - "Wait or move until unit leaves Hero command range"
+    expected: "Unit continues executing Move (order not auto-cancelled)"
+  - id: P1.2.4
+    group: OrdersMove
+    title: New order only when in range
+    steps:
+      - "With unit out of range try to issue new order (RMB)"
+      - "Then bring unit back in range and issue order"
+    expected: "Out of range: unit does not receive order; back in range: receives order"
+  - id: P1.2.5
+    group: OrdersMove
+    title: Issuer is selected Hero
+    steps:
+      - "Select only Hero; RMB on ground"
+    expected: "No crash; optionally Hero receives Move (if implemented)"
+
+  # --- P1.3 Orders – Attack (optional in P1) ---
+  - id: P1.3.1
+    group: OrdersAttack
+    title: RMB on enemy – Attack
+    steps:
+      - "Select Hero + units in range; RMB on enemy actor"
+    expected: "Units in range receive Attack order (target); approach/attack per implementation"
+  - id: P1.3.2
+    group: OrdersAttack
+    title: Attack not given to units outside range
+    steps:
+      - "Select mix of in-range and out-of-range units; RMB on enemy"
+    expected: "Only in-range units receive Attack"
+
+  # --- P1.4 Input ---
+  - id: P1.4.1
+    group: Input
+    title: WASD / Arrows – camera pan only
+    steps:
+      - "Use WASD or Arrow keys"
+    expected: "Camera moves (pan); no unit control (no move, no selection)"
+  - id: P1.4.2
+    group: Input
+    title: LMB / RMB mapped
+    steps:
+      - "Check Input mapping (Enhanced Input or Legacy)"
+    expected: "LMB = Select; Shift+LMB = Add Select; RMB = Context (Move/Attack)"
+  - id: P1.4.3
+    group: Input
+    title: Trace – ground vs actor
+    steps:
+      - "RMB on ground vs RMB on unit/enemy"
+    expected: "Ground → Move; friendly actor → select/add; enemy actor → Attack (if in scope)"
+
+  # --- P1.5 Authority & Persistence ---
+  - id: P1.5.1
+    group: Authority
+    title: Hero CommandRadius 2500
+    steps:
+      - "Check in editor or at runtime"
+    expected: "Value 2500 UU (or from data)"
+  - id: P1.5.2
+    group: Authority
+    title: Captain 1200 (if in P1)
+    steps:
+      - "If Captain exists in P1: check radius"
+    expected: "1200 UU; Issuer Captain commands only units within 1200"
+  - id: P1.5.3
+    group: Authority
+    title: Same faction required for order
+    steps:
+      - "Unit of different faction (in range)"
+    expected: "CanIssueOrderToUnit false; unit does not receive order on RMB"

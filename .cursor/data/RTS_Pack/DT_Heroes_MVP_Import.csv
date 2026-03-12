@@ -1,0 +1,4 @@
+HeroId,Faction,DisplayName,Archetype,PowerScale,BaseHP,BaseDamage,MoveSpeed,MoraleAura,XPTableId,Ability_L1,Ability_L6,Ability_L11,Ability_L16,Ability_L21
+HighCommander,Humans,High Commander,Commander,1,600,35,480,10,HeroXP_Prototype,Inspire,FormationBonus,DefensiveDoctrine,EliteUpgrade,BattlefieldCommandAura
+BloodLord,Vampires,Blood Lord,CasterAssassin,2,700,45,500,0,HeroXP_Prototype,LifeDrain,FearWave,ShadowStep,BloodFrenzy,MassTerrorAura
+AlphaPrime,Werewolves,Alpha Prime,Brawler,3,850,55,520,5,HeroXP_Prototype,HowlBoost,PackCoordination,PredatorSense,ControlledBerserk,ApexForm

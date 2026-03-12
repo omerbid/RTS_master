@@ -1,0 +1,159 @@
+# RTS_Monsters – P2 Region Control Tests
+# Sources: GDD.md, PLANNING_P2_region_control.md, PLANNING_P2_epics_1_2_4.md, RTS_ARCHITECTURE.md
+# Run: .\run_tests.ps1 -Phase P2
+
+phase: P2
+definition_of_done: "Region control 0–5 with uncontested presence gain; Secure Region action working; win on 5, lose on no Hero and no region >= 3."
+
+tests:
+  # --- P2.1 Region Queries & Contestation (Epic 1) ---
+  - id: P2.1.1
+    group: RegionQueries
+    title: IsPointInRegion
+    steps:
+      - "Call IsPointInRegion with location inside RegionBounds"
+      - "Call with location outside"
+    expected: "true inside, false outside; uses RegionBounds (box)"
+  - id: P2.1.2
+    group: RegionQueries
+    title: GetHeroesInRegion / HasHeroOfFaction
+    steps:
+      - "Place Hero inside region; call GetHeroesInRegion and HasHeroOfFaction(Hero's faction)"
+    expected: "Hero in list; HasHeroOfFaction returns true for that faction"
+  - id: P2.1.3
+    group: RegionQueries
+    title: IsContested – two factions with Heroes in region
+    steps:
+      - "Human Hero and Vampire Hero both inside region"
+    expected: "IsContested() == true (no control gain)"
+  - id: P2.1.4
+    group: RegionQueries
+    title: IsContested – single faction
+    steps:
+      - "Only one faction has Hero in region"
+    expected: "IsContested() == false"
+  - id: P2.1.5
+    group: RegionQueries
+    title: SetControlLevelForFaction clamp 0–5
+    steps:
+      - "Call SetControlLevelForFaction with level -1 and 10"
+    expected: "Clamped to 0 and 5; DominantFaction updated after change"
+  - id: P2.1.6
+    group: RegionQueries
+    title: GetRegionAtLocation (MVP single region)
+    steps:
+      - "Call GetRegionAtLocation(WorldContext, point inside region)"
+    expected: "Returns the region volume; null or valid for point outside"
+
+  # --- P2.2 Control Progression 0→4 (Epic 2) ---
+  - id: P2.2.1
+    group: ControlProgression
+    title: Control increases with Hero present, uncontested
+    steps:
+      - "Hero and units in region; no enemy Hero"
+      - "Wait for ControlGainIntervalSeconds (e.g. 30s) or trigger evaluation"
+    expected: "Control level for Hero's faction increases (0→1→2→3→4); not to 5"
+  - id: P2.2.2
+    group: ControlProgression
+    title: Passive gain cap at 4
+    steps:
+      - "Reach control 4 by presence only"
+    expected: "Level never becomes 5 from passive gain; 5 only via Secure"
+  - id: P2.2.3
+    group: ControlProgression
+    title: No gain when contested
+    steps:
+      - "Two factions have Heroes in region"
+    expected: "Control does not increase (or per design: no gain while contested)"
+  - id: P2.2.4
+    group: ControlProgression
+    title: Control level names (optional)
+    steps:
+      - "Call GetControlLevelName(0) .. GetControlLevelName(5)"
+    expected: "0=None, 1=Presence, 2=Influence, 3=Control, 4=Established, 5=Dominance (or equivalent)"
+
+  # --- P2.3 Secure Region Action (Epic 3) ---
+  - id: P2.3.1
+    group: SecureRegion
+    title: Secure available at control 4
+    steps:
+      - "Set faction control to 4; Hero inside region; not contested"
+    expected: "TryStartSecureRegion() succeeds (or Secure action available)"
+  - id: P2.3.2
+    group: SecureRegion
+    title: Secure not available at control 3
+    steps:
+      - "Set control to 3; Hero in region"
+    expected: "Secure not available or TryStartSecureRegion fails"
+  - id: P2.3.3
+    group: SecureRegion
+    title: Secure channel 15 seconds – success
+    steps:
+      - "Start Secure; Hero stays in region; no enemy enters"
+      - "Wait 15 seconds"
+    expected: "Channel completes; SetControlLevelForFaction(Faction, 5); win triggers"
+  - id: P2.3.4
+    group: SecureRegion
+    title: Secure cancel – Hero leaves region
+    steps:
+      - "Start Secure channel; move Hero out of region before 15s"
+    expected: "Channel cancels; control remains 4"
+  - id: P2.3.5
+    group: SecureRegion
+    title: Secure cancel – enemy Hero enters
+    steps:
+      - "Start Secure; enemy Hero enters region before 15s"
+    expected: "Channel cancels; control remains 4"
+  - id: P2.3.6
+    group: SecureRegion
+    title: Secure input binding
+    steps:
+      - "Check input for Secure Region (Hold + click or key + click per GDD)"
+    expected: "Binding calls selected Hero TryStartSecureRegion (or equivalent)"
+
+  # --- P2.4 Win / Lose (Epic 4) ---
+  - id: P2.4.1
+    group: WinLose
+    title: Win – control 5
+    steps:
+      - "Set control to 5 for a faction (via Secure or debug)"
+    expected: "Game reports win for that faction; game end flow (state/UI)"
+  - id: P2.4.2
+    group: WinLose
+    title: Lose – no living Hero and no region >= 3
+    steps:
+      - "Kill only Hero of faction F"
+      - "Ensure no region has F's control >= 3"
+    expected: "Game reports lose for F"
+  - id: P2.4.3
+    group: WinLose
+    title: No lose when region >= 3 exists
+    steps:
+      - "Faction F has no living Hero but has a region with control >= 3 for F"
+    expected: "Lose does not trigger (respawn possible per GDD)"
+  - id: P2.4.4
+    group: WinLose
+    title: Game end flow
+    steps:
+      - "Trigger win or lose"
+    expected: "Game state set (e.g. Won/Lost); result shown (UI or log); input disabled or return to menu as designed"
+
+  # --- P2.5 Integration & Single Region ---
+  - id: P2.5.1
+    group: Integration
+    title: Single region MVP
+    steps:
+      - "One ARTSRegionVolume in level; all region logic uses it"
+    expected: "Secure and win/lose work with that region"
+  - id: P2.5.2
+    group: Integration
+    title: Overlap events – Hero enter/exit
+    steps:
+      - "Hero walks into region then out"
+    expected: "ActorsInRegion or equivalent updated; control evaluation uses presence correctly"
+  - id: P2.5.3
+    group: Integration
+    title: RecalcDominantFaction after SetControlLevel
+    steps:
+      - "SetControlLevelForFaction for different factions"
+    expected: "DominantFaction reflects highest control level"

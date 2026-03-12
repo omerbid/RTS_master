@@ -1,0 +1,192 @@
+# RTS_Monsters – P0 Core Setup Tests
+# Sources: GDD.md, PLANNING_P0_core_setup.md, RTS_CHECKLIST_EPIC_VS_MVP.md, RTS_TESTS_P0_P1.md
+# Run: .\run_tests.ps1 -Phase P0
+
+phase: P0
+definition_of_done: "C++ core (Hero, Unit, SquadState, Region, Morale, CommandAuthority) exists, compiles, data-driven, ready for P1."
+
+tests:
+  # --- P0.1 Data Backbone & Registry ---
+  - id: P0.1.1
+    group: DataBackbone
+    title: DataTables load without errors
+    steps:
+      - "Start PIE"
+      - "Check Output Log for table/registry messages"
+    expected: "No 'table not found' or 'Units table not found' / 'Heroes table not found'"
+  - id: P0.1.2
+    group: DataBackbone
+    title: Registry returns rows by ID
+    steps:
+      - "In Blueprint or Console call GetUnitRow(UnitId), GetHeroRow(HeroId)"
+    expected: "Values match CSV/DataTable; no crash"
+  - id: P0.1.3
+    group: DataBackbone
+    title: Missing row returns false
+    steps:
+      - "Call GetUnitRow with non-existent UnitId"
+    expected: "Function returns false; OutRow not used / no crash"
+  - id: P0.1.4
+    group: DataBackbone
+    title: GetUnitRowForHero works
+    steps:
+      - "Call GetUnitRowForHero with valid FHeroRow"
+    expected: "FUnitRow returned (by hero faction or fallback)"
+
+  # --- P0.2 Core Characters (Unit / Hero) ---
+  - id: P0.2.1
+    group: CoreCharacters
+    title: Spawn Unit – init from Registry
+    steps:
+      - "Place unit BP in map with UnitId set"
+      - "Begin Play calls InitializeFromRegistry"
+      - "Run PIE"
+    expected: "HP, Damage, MoveSpeed, MoraleBase, PowerScale from FUnitRow initialized; no warnings"
+  - id: P0.2.2
+    group: CoreCharacters
+    title: Spawn Hero – init from Registry
+    steps:
+      - "Place hero BP with HeroId; Run PIE; InitializeFromRegistry"
+    expected: "Stats from FHeroRow + base from FUnitRow; CommandAuthorityComponent present and active"
+  - id: P0.2.3
+    group: CoreCharacters
+    title: Unit without UnitId or missing Registry
+    steps:
+      - "Spawn unit without UnitId or with invalid UnitId; Run PIE"
+    expected: "InitializeFromRegistry returns false; no crash; defined behavior/log"
+  - id: P0.2.4
+    group: CoreCharacters
+    title: FactionId and UnitId exposed in Blueprint
+    steps:
+      - "Open Unit/Hero BP"
+    expected: "FactionId, UnitId editable/readable; CachedUnitData visible after init"
+
+  # --- P0.3 MoraleComponent ---
+  - id: P0.3.1
+    group: Morale
+    title: Morale init in BeginPlay
+    steps:
+      - "Spawn unit with InitializeFromRegistry"
+    expected: "MoraleComponent.CurrentMorale = BaseMorale (or from FUnitRow); within [MinMorale, MaxMorale]"
+  - id: P0.3.2
+    group: Morale
+    title: ApplyMoraleDelta
+    steps:
+      - "Call ApplyMoraleDelta(10) then ApplyMoraleDelta(-5)"
+    expected: "Value updates clamped to [MinMorale, MaxMorale]; function returns new value"
+  - id: P0.3.3
+    group: Morale
+    title: SetMorale clamping
+    steps:
+      - "Call SetMorale(150) with MaxMorale=100"
+    expected: "Value clamped to 100; no overflow"
+  - id: P0.3.4
+    group: Morale
+    title: Unit without MoraleComponent
+    steps:
+      - "Spawn unit without component or disable it"
+    expected: "Defined behavior (warning/fallback); no crash"
+
+  # --- P0.4 CommandAuthorityComponent ---
+  - id: P0.4.1
+    group: CommandAuthority
+    title: Hero default command radius
+    steps:
+      - "Check CommandRadius on Hero after spawn"
+    expected: "2500 UU (or GDD value)"
+  - id: P0.4.2
+    group: CommandAuthority
+    title: CanIssueOrderToUnit – unit in range
+    steps:
+      - "Hero and unit same faction, distance < CommandRadius"
+    expected: "CanIssueOrderToUnit(Unit) == true"
+  - id: P0.4.3
+    group: CommandAuthority
+    title: CanIssueOrderToUnit – unit out of range
+    steps:
+      - "Hero and unit same faction, distance > CommandRadius"
+    expected: "CanIssueOrderToUnit(Unit) == false"
+  - id: P0.4.4
+    group: CommandAuthority
+    title: CanIssueOrderToUnit – different faction
+    steps:
+      - "Hero faction A, unit faction B (in range)"
+    expected: "CanIssueOrderToUnit(Unit) == false"
+  - id: P0.4.5
+    group: CommandAuthority
+    title: bAuthorityEnabled false
+    steps:
+      - "Set bAuthorityEnabled = false on Hero"
+    expected: "CanIssueOrderToUnit(Unit) == false even if in range"
+
+  # --- P0.5 SquadState (URTSSquadState) ---
+  - id: P0.5.1
+    group: SquadState
+    title: Create Squad and add members
+    steps:
+      - "Create Squad; call AddMember for 2–3 units with different morale"
+    expected: "Members contains units; RecalcMorale() returns sensible average"
+  - id: P0.5.2
+    group: SquadState
+    title: RecalcMorale after morale change
+    steps:
+      - "Change one unit morale (ApplyMoraleDelta); call RecalcMorale on Squad"
+    expected: "AverageMorale (or equivalent) updated"
+  - id: P0.5.3
+    group: SquadState
+    title: RemoveMember
+    steps:
+      - "Remove unit from Squad; call RecalcMorale"
+    expected: "Unit not in Members; average updated"
+  - id: P0.5.4
+    group: SquadState
+    title: RecalcMorale on empty Squad
+    steps:
+      - "Call RecalcMorale on Squad with no members"
+    expected: "No crash; default value (e.g. 0 or BaseMorale)"
+
+  # --- P0.6 Region (ARTSRegionVolume) ---
+  - id: P0.6.1
+    group: Region
+    title: Place Region in map
+    steps:
+      - "Drag RTS Region Volume into map; Run PIE"
+    expected: "No crash; Volume visible/selectable"
+  - id: P0.6.2
+    group: Region
+    title: GetControlLevelForFaction
+    steps:
+      - "Set ControlLevel for a faction (0–5); call GetControlLevelForFaction"
+    expected: "Returns matching value (0–5)"
+  - id: P0.6.3
+    group: Region
+    title: GetDominantFaction
+    steps:
+      - "Set control so one faction is dominant; call GetDominantFaction"
+    expected: "Correct FactionId returned"
+  - id: P0.6.4
+    group: Region
+    title: Stability / Population
+    steps:
+      - "Get/Set Stability, Population if exposed"
+    expected: "Values persist; no errors"
+
+  # --- P0.7 Game Mode & Map ---
+  - id: P0.7.1
+    group: GameMode
+    title: GlobalDefaultGameMode
+    steps:
+      - "Run PIE from default map"
+    expected: "BP_RTSGameMode loads; no 'failed to find GameMode'"
+  - id: P0.7.2
+    group: GameState
+    title: GameState type
+    steps:
+      - "During PIE check GameState"
+    expected: "GameState is BP_RTSGameState (or equivalent); squad manager available if defined"
+  - id: P0.7.3
+    group: GameMode
+    title: Content/Data/ and table paths
+    steps:
+      - "Ensure DataTables in Content/Data/ with names DT_Units_MVP, DT_Heroes_MVP, DT_HeroXP_Prototype, DT_MoraleThresholds"
+    expected: "Registry finds tables; P0.1.1 passes"

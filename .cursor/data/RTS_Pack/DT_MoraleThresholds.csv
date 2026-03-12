@@ -1,0 +1,5 @@
+RowName,Name,Min,Max,Effect
+Broken,Broken,0,30,High retreat chance
+Normal,Normal,31,69,No modifier
+Inspired,Inspired,70,89,Minor buff
+Heroic,Heroic,90,100,Major buff

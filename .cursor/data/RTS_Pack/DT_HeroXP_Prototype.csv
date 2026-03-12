@@ -1,0 +1,14 @@
+RowName,TableId,Level,XPRequired
+Lv1,HeroXP_Prototype,1,0
+Lv2,HeroXP_Prototype,2,120
+Lv3,HeroXP_Prototype,3,260
+Lv4,HeroXP_Prototype,4,420
+Lv5,HeroXP_Prototype,5,500
+Lv6,HeroXP_Prototype,6,650
+Lv7,HeroXP_Prototype,7,850
+Lv8,HeroXP_Prototype,8,1100
+Lv9,HeroXP_Prototype,9,1300
+Lv10,HeroXP_Prototype,10,1500
+Lv15,HeroXP_Prototype,15,3000
+Lv20,HeroXP_Prototype,20,5500
+Lv25,HeroXP_Prototype,25,9000
