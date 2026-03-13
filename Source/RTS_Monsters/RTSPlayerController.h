@@ -10,8 +10,8 @@ class ARTSUnitCharacter;
 class ARTSHeroCharacter;
 
 /**
- * P1: Selection (LMB / Shift+LMB), context order (RMB), command-radius authority.
- * Selection owned here; orders persist on units when leaving range (GDD).
+ * P1: Selection (LMB / Shift+LMB), box select (LMB drag), context order (RMB), command-radius authority.
+ * Selection owned here (GDD); orders persist on units when leaving range – only new orders require authority (GDD).
  */
 UCLASS(config = Game, meta = (DisplayName = "RTS Player Controller"))
 class RTS_MONSTERS_API ARTSPlayerController : public APlayerController
@@ -47,18 +47,36 @@ protected:
 	virtual void PlayerTick(float DeltaTime) override;
 
 private:
-	/** LMB: select unit (or add if Shift held). RMB: context order. */
-	void OnInputSelect();
+	/** LMB pressed: store position for possible box select. */
+	void OnInputSelectPressed();
+	/** LMB released: single click → select unit; drag → box select (GDD: LMB select, Shift+LMB add). */
+	void OnInputSelectReleased();
 	void OnInputOrderContext();
 	void OnZoomIn();
 	void OnZoomOut();
 
+	/** P2 Phase 5: Secure Region – key S when Hero selected. */
+	void OnInputSecureRegion();
+
+	/** P2 Phase 6: Win/Lose feedback. */
+	UFUNCTION()
+	void OnGameWon(EFactionId Faction);
+	UFUNCTION()
+	void OnGameLost(EFactionId Faction);
+
 	/** Pick issuer from selection (Hero preferred, else first unit with command authority). */
 	ARTSUnitCharacter* GetOrderIssuer() const;
+
+	/** P1 box select: get units whose screen position is inside the 2D box. Shift = add to selection. */
+	void ApplyBoxSelect(const FVector2D& ScreenMin, const FVector2D& ScreenMax, bool bAddToSelection);
 
 	/** Selected units (selection ownership; GDD). */
 	UPROPERTY()
 	TArray<TWeakObjectPtr<ARTSUnitCharacter>> SelectedUnits;
+
+	/** Box select: LMB press screen position (for drag detection). */
+	FVector2D BoxSelectPressScreenPos;
+	bool bBoxSelectActive = false;
 
 	/** True while middle mouse held for camera pitch (enables mouse capture so delta is reported). */
 	bool bMiddleMouseHeldForPitch = false;

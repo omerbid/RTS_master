@@ -4,6 +4,8 @@
 **גרסת Unreal:** 5.4  
 **מודול:** RTS_Monsters (Runtime)
 
+**מסמכי תכנון (תוכן נוסף):** תיקיית **Docs/** בפרויקט מכילה את חבילת התכנון (MASTER_GDD_MVP, CORE_GAME_MECHANICS, campaign_layer_spec, economy_system) ו־**Docs/AI_Knowledge/** מכילה ארכיטקטורה ומפת מערכות (PROJECT_BRAIN, RTS_AI_GAME_DEV_DASHBOARD, ARCHITECTURE_GUIDE וכו'). מדריך שילוב: **Docs/README_FOR_CURSOR.md**.
+
 ---
 
 ## 1. סקירת פרויקט
@@ -22,6 +24,8 @@
 
 ```
 RTS_Monsters/
+├── Docs/                      # מסמכי תכנון (MASTER_GDD_MVP, CORE_GAME_MECHANICS, ...); README_FOR_CURSOR.md
+│   └── AI_Knowledge/          # ארכיטקטורה ומפת מערכות (PROJECT_BRAIN, ARCHITECTURE_GUIDE, ...)
 ├── Config/                    # הגדרות מנוע ומשחק
 │   ├── DefaultEngine.ini      # GameMode, מפות, redirects
 │   ├── DefaultGame.ini        # ProjectName (לעדכן!)
@@ -84,7 +88,7 @@ RTS_Monsters/
 | מחלקה | בסיס | תפקיד עיקרי |
 |--------|------|--------------|
 | **ARTSUnitCharacter** | ACharacter | Faction, UnitId, FUnitRow, MoraleComponent; InitializeFromRegistry / InitializeFromUnitRow. |
-| **ARTSHeroCharacter** | ARTSUnitCharacter | HeroId, FHeroRow, CommandAuthorityComponent; IssueOrderToUnitsInRange (stub). |
+| **ARTSHeroCharacter** | ARTSUnitCharacter | HeroId, FHeroRow, CommandAuthorityComponent, SecureRegionComponent; IssueOrderToUnitsInRange, TryStartSecureRegion. |
 
 ### 3.3 סקוואד ומורל
 
@@ -98,7 +102,9 @@ RTS_Monsters/
 | רכיב | תפקיד |
 |------|--------|
 | **URTSCommandAuthorityComponent** | CommandRadius, bAuthorityEnabled; CanIssueOrderToUnit (טווח + פאקשן). |
-| **ARTSRegionVolume** | שליטה לפי פאקשן (ControlLevel), Population, Stability, DominantFaction; GetControlLevelForFaction. |
+| **ARTSRegionVolume** | שליטה 0–5 לפי פאקשן, overlap גיבורים, IsPointInRegion, GetRegionAtLocation, IsContested; טיימר התקדמות 0→4; SetControlLevelForFaction. |
+| **URTSSecureRegionComponent** | P2: Secure Region על הגיבור – ערוץ 15s, ביטול ביציאה/אויב; TryStartSecureRegion. |
+| **URTSVictorySubsystem** | GameInstanceSubsystem: ניצחון ב־control 5, הפסד כשאין גיבור + אין Region ≥ 3; OnGameWon/OnGameLost. |
 
 ### 3.5 Game Mode / State
 

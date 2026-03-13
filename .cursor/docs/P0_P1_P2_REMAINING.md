@@ -30,7 +30,7 @@
 ## P1 – פקודות וקלט (Selection, Orders, Input)
 
 ### כבר ממומש
-- בחירה: LMB (SetSelection), Shift+LMB (AddToSelection), קליק על קרקע (ClearSelection)
+- בחירה: LMB (SetSelection), Shift+LMB (AddToSelection), **גרירת LMB (box select)**; קליק על קרקע (ClearSelection)
 - פקודות: RMB על קרקע → Move, RMB על אויב → Attack; טווח פקודה (CommandAuthority) נאכף
 - קלט: WASD/חצים להזזת מצלמה (RTSCameraPawn), עכבר לבחירה ולפקודות
 - GetHitUnderCursor, GetOrderIssuer (גיבור מועדף), פקודות מתמשכות (היחידה ממשיכה גם אחרי יציאה מטווח)
@@ -56,20 +56,19 @@
 ### מה נשאר
 | משימה | איפה | הערה |
 |--------|------|------|
-| **קלט ל־Secure Region** | RTSPlayerController / Input | אין עדיין **מיפוי קלט** שמפעיל את TryStartSecureRegion. צריך: מקש/החזקה + קליק על Region (או מקש ייעודי) שקורא ל־GetOrderIssuer()->TryStartSecureRegion(). |
-| **סיום משחק (UI/לוג)** | VictorySubsystem / UI | אחרי Win/Lose – להציג תוצאה (מסך/לוג/הפסקת input). כרגע הלוגיקה קיימת; חסר חיווי למשתמש. |
+| ~~**קלט ל־Secure Region**~~ | ✅ בוצע | מקש **S** – OnInputSecureRegion קורא ל־TryStartSecureRegion. |
+| ~~**סיום משחק (UI/לוג)**~~ | ✅ בוצע | OnGameWon/OnGameLost – AddOnScreenDebugMessage + SetPause. |
 | (אופציונלי) ויזואל/סאונד ל־Secure | Blueprint / FX | OnSecureRegionStarted / Cancelled / Completed – לחבר אפקטים. |
-| (אופציונלי) תיעוד ב־Plan | PLANNING_P2 | לעדכן סימון משימות שהושלמו ב־PLANNING_P2_region_control.md. |
 
-**סיכום P2:** הליבה **מלאה**. נשאר **קלט ל־Secure Region** + **חיווי Win/Lose** (UI/לוג/הפסקת משחק).
+**סיכום P2:** הליבה **מלאה**. קלט Secure Region (מקש S) + חיווי Win/Lose **הושלמו**.
 
 ---
 
 ## סדר עבודה מומלץ
 
-1. **P0:** ליצור DataTables ב־Content/Data ו־Blueprint Unit/Hero עם UnitId/HeroId – כך PIE יעבוד עם נתונים ו־Registry.
-2. **P1:** להריץ טסטים/בדיקות PIE לפי RTS_TESTS_P0_P1.md ולסמן Done.
-3. **P2:** להוסיף מיפוי קלט ל־Secure Region (למשל מקש + קליק על Region → TryStartSecureRegion), ולהוסיף חיווי Win/Lose (מסך/לוג/הפסקת input).
+1. **P0:** אם עדיין חסר – DataTables ב־Content (RTS/Data/Data_Tables) ו־Blueprint Unit/Hero עם UnitId/HeroId. אם כבר קיים – וודא PIE בלי "table not found".
+2. **P1:** להריץ טסטים/בדיקות PIE לפי RTS_TESTS_P0_P1.md ולסמן עבר/נכשל.
+3. **P2:** הושלם (קלט מקש S, חיווי Win/Lose על המסך + SetPause). אופציונלי: ויזואל/סאונד ל־Secure.
 
 **קבצים רלוונטיים:**  
 `RTS_CHECKLIST_EPIC_VS_MVP.md` | `DATA_TABLES_CHECKLIST.md` | `RTS_TESTS_P0_P1.md` | `PLANNING_P2_region_control.md`

@@ -15,6 +15,20 @@ enum class EFactionId : uint8
 	Werewolves  UMETA(DisplayName = "Werewolves")
 };
 
+/** Region type from MASTER_GDD (Map Structure). Used for Phase 2+ settlement/region logic. */
+UENUM(BlueprintType)
+enum class ERegionType : uint8
+{
+	Unknown     UMETA(DisplayName = "Unknown"),
+	Capital     UMETA(DisplayName = "Capital"),
+	City        UMETA(DisplayName = "City"),
+	Town        UMETA(DisplayName = "Town"),
+	Village     UMETA(DisplayName = "Village"),
+	Hamlet      UMETA(DisplayName = "Hamlet"),
+	WildForest  UMETA(DisplayName = "Wild Forest"),
+	Ruins       UMETA(DisplayName = "Ruins")
+};
+
 UENUM(BlueprintType)
 enum class EUnitRole : uint8
 {

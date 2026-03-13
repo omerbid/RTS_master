@@ -177,15 +177,21 @@ void ARTSRegionVolume::EvaluateControlGain()
 	const int32 MaxGain = FMath::Clamp(ControlGainMaxLevel, 0, 5);
 	if (HasHeroOfFaction(EFactionId::Humans) && GetControlLevelForFaction(EFactionId::Humans) < MaxGain)
 	{
-		SetControlLevelForFaction(EFactionId::Humans, GetControlLevelForFaction(EFactionId::Humans) + 1);
+		const int32 NewLevel = GetControlLevelForFaction(EFactionId::Humans) + 1;
+		SetControlLevelForFaction(EFactionId::Humans, NewLevel);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Silver, FString::Printf(TEXT("[Region] Control Humans → %d"), NewLevel));
 	}
 	if (HasHeroOfFaction(EFactionId::Vampires) && GetControlLevelForFaction(EFactionId::Vampires) < MaxGain)
 	{
-		SetControlLevelForFaction(EFactionId::Vampires, GetControlLevelForFaction(EFactionId::Vampires) + 1);
+		const int32 NewLevel = GetControlLevelForFaction(EFactionId::Vampires) + 1;
+		SetControlLevelForFaction(EFactionId::Vampires, NewLevel);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Silver, FString::Printf(TEXT("[Region] Control Vampires → %d"), NewLevel));
 	}
 	if (HasHeroOfFaction(EFactionId::Werewolves) && GetControlLevelForFaction(EFactionId::Werewolves) < MaxGain)
 	{
-		SetControlLevelForFaction(EFactionId::Werewolves, GetControlLevelForFaction(EFactionId::Werewolves) + 1);
+		const int32 NewLevel = GetControlLevelForFaction(EFactionId::Werewolves) + 1;
+		SetControlLevelForFaction(EFactionId::Werewolves, NewLevel);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Silver, FString::Printf(TEXT("[Region] Control Werewolves → %d"), NewLevel));
 	}
 }
 

@@ -1,8 +1,24 @@
 # Plan: P2 Region Control (0–5, Secure Action, Victory at 5)
 
 **Created**: 2026-03-08  
-**Status**: Completed (Epics 1–4 implemented; Epic 5 optional)  
+**Updated**: 2026-02-21 (Phases 1–7 plan)  
+**Status**: Phases 1–4 complete; Phases 5–7 remaining (Input, UI, Polish). See `PLANNING_P2_phases_1_7.md`.  
 **GDD**: `.cursor/GDD.md` (Region Control System, Secure Region, Win/Lose, MVP Locked Values P2)
+
+**Related docs:** `PLANNING_P2_phases_1_7.md` (Phases 1–7) | `P0_P1_P2_REMAINING.md` (מה נשאר) | `P0_P1_QUICK_REFERENCE.md` | `RTS_ARCHITECTURE.md` | `PROJECT_MAP.md` | `PLANNING_P2_epics_1_2_4.md`
+
+---
+
+## Implementation status (aligned with current code)
+
+| Area | Classes / files | Notes |
+|------|------------------|--------|
+| **Region** | `ARTSRegionVolume` | IsPointInRegion, SetControlLevelForFaction, RecalcDominantFaction, GetRegionAtLocation(WorldContext, Location), overlap → GetHeroesInRegion, HasHeroOfFaction, IsContested, GetControlLevelName; timer → EvaluateControlGain (0→4). |
+| **Secure Region** | `URTSSecureRegionComponent`, `ARTSHeroCharacter::TryStartSecureRegion()` | 15s channel, validate every 0.5s, cancel on leave/contested; success → SetControlLevelForFaction(5). |
+| **Win/Lose** | `URTSVictorySubsystem` | NotifyControlReachedFive → Win; NotifyHeroDeath → CheckLoseCondition (no hero + no region ≥ 3 → Lose). Hero Destroyed() calls NotifyHeroDeath. |
+| **Remaining** | Input, UI | **Input:** Bind key/hold+click to `GetOrderIssuer()->TryStartSecureRegion()`. **UI:** Show Win/Lose result, optionally pause/disable input. See `P0_P1_P2_REMAINING.md`. |
+
+**Placing a region:** Place **RTS Region Volume** in the level (Place Actors / All Classes). Select it → **Region Bounds** (Box) → set **Box Extent** in Details or scale with **R** in viewport so the green box covers the play area.
 
 ---
 
@@ -88,11 +104,11 @@ Implement P2: **region control levels 0–5** with rules for gaining control (He
 
 ### Epic 1: Region Queries & Contestation
 
-- [ ] Add `IsPointInRegion(FVector WorldLocation) const` to ARTSRegionVolume (use RegionBounds box).
+- [x] Add `IsPointInRegion(FVector WorldLocation) const` to ARTSRegionVolume (use RegionBounds box).
 - [ ] Add overlap or spatial query so region knows which actors (Heroes/units) are inside; or provide `GetActorsInRegion()` / “is Hero in this region?” using existing bounds.
 - [ ] Implement `IsContested()`: true if any Hero of a faction **other than** the one with highest control (or “any two factions with Heroes inside”) is in region. MVP: two factions; contested = Human Hero and Vampire Hero both in region.
-- [ ] Add `SetControlLevelForFaction(EFactionId Faction, int32 Level)` with clamp 0–5; update DominantFaction after change.
-- [ ] Optional: helper for control level name (0=None … 5=Dominance) for UI.
+- [x] Add `SetControlLevelForFaction(EFactionId Faction, int32 Level)` with clamp 0–5; update DominantFaction after change.
+- [x] Optional: helper for control level name (0=None … 5=Dominance) for UI.
 
 ### Epic 2: Control Progression (0–4)
 
@@ -124,20 +140,20 @@ Implement P2: **region control levels 0–5** with rules for gaining control (He
 
 ## 4. Tests & Validation
 
-- [ ] Hero and units in region, no enemy: control increases over time (0→1→2→3→4), not to 5 without Secure.
-- [ ] At control 4: Secure Region available; Hero inside, no enemy. Channel 15s completes → control 5, win triggers.
-- [ ] Secure channel: Hero leaves region mid-channel → channel cancels.
-- [ ] Secure channel: Enemy Hero enters region mid-channel → channel cancels.
-- [ ] Win: control 5 → game reports win for that faction.
-- [ ] Lose: Hero dead and no region with control ≥ 3 for that faction → game reports lose.
+- [x] Hero and units in region, no enemy: control increases over time (0→1→2→3→4), not to 5 without Secure.
+- [x] At control 4: Secure Region available; Hero inside, no enemy. Channel 15s completes → control 5, win triggers.
+- [x] Secure channel: Hero leaves region mid-channel → channel cancels.
+- [x] Secure channel: Enemy Hero enters region mid-channel → channel cancels.
+- [x] Win: control 5 → game reports win for that faction (VictorySubsystem).
+- [x] Lose: Hero dead and no region with control ≥ 3 for that faction → game reports lose (VictorySubsystem).
 
 ---
 
 ## 5. Documentation
 
-- [ ] Inline comments: Secure Region rules (15s, cancel), win/lose conditions (GDD).
-- [ ] Plan status updated when epics complete.
-- [ ] DataAsset or config for control gain rate and Secure duration if tunable.
+- [x] Inline comments: Secure Region rules (15s, cancel), win/lose conditions (GDD).
+- [x] Plan status updated when epics complete.
+- [x] DataAsset or config for control gain rate and Secure duration if tunable (ControlGainIntervalSeconds, SecureChannelDurationSeconds on Region/Component).
 
 ---
 
@@ -161,11 +177,12 @@ Implement P2: **region control levels 0–5** with rules for gaining control (He
 
 ## 7. Acceptance Criteria
 
-- [ ] Control level 0–5 per faction in region; passive gain only up to 4 when Hero (+ units) present and uncontested.
-- [ ] Secure Region: available at 4, Hero in region, not contested; 15s channel; cancel if Hero leaves or enemy Hero enters; success → level 5.
-- [ ] Reach control 5 → skirmish win for that faction.
-- [ ] No living Hero and no region with control ≥ 3 for that faction → lose.
-- [ ] Single region MVP: one region in map; win/lose and Secure work with it.
+- [x] Control level 0–5 per faction in region; passive gain only up to 4 when Hero (+ units) present and uncontested.
+- [x] Secure Region: available at 4, Hero in region, not contested; 15s channel; cancel if Hero leaves or enemy Hero enters; success → level 5.
+- [x] Reach control 5 → skirmish win for that faction.
+- [x] No living Hero and no region with control ≥ 3 for that faction → lose.
+- [x] Single region MVP: one region in map; win/lose and Secure work with it.
+- [ ] **Input:** Secure Region bound to key/hold+click (call `TryStartSecureRegion()` on selected Hero). **UI:** Win/Lose feedback (see P0_P1_P2_REMAINING).
 
 **Definition of Done (P2):** Region control 0–5 with uncontested presence gain; Secure Region action working; win on 5, lose on no Hero and no region ≥ 3.
 

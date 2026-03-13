@@ -1,7 +1,7 @@
 # Plan: P2 Epics 1, 2, 4 — Region Queries, Control Progression, Win/Lose
 
 **Created**: 2026-03-08  
-**Status**: In Progress (Epics 1, 2, 4 implemented; build pending — close editor or disable Live Coding to compile)  
+**Status**: Completed (Epics 1, 2, 4 implemented; P2 full plan in PLANNING_P2_region_control.md)  
 **Parent**: `PLANNING_P2_region_control.md` (Epics 1, 2, 4 only — no Secure Region input/Epic 3)  
 **GDD**: `.cursor/GDD.md` (Region Control System, Win/Lose, MVP P2)
 

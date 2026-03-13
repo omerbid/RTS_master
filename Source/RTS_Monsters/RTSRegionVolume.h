@@ -90,6 +90,27 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region")
 	float Stability;
 
+	/** Placeholders from Docs (MASTER_GDD_MVP, economy_system, campaign_layer_spec). Used by later phases. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	float FoodCapacity = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	int32 WildlifeCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	float ThreatLevel = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	float GarrisonPower = 0.f;
+
+	/** 0=None, 1=Normal, 2=Collapsed, etc. (economy_system, MASTER_GDD). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	int32 SettlementState = 0;
+
+	/** Region type from MASTER_GDD (Capital, City, Town, Village, Hamlet, Wild Forest, Ruins). For Phase 2+ settlement logic. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region|Docs")
+	ERegionType RegionType = ERegionType::Unknown;
+
 	/** Dominant faction in this region (based on control). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region")
 	EFactionId DominantFaction;

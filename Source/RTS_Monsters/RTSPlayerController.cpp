@@ -4,15 +4,18 @@
 #include "RTSHeroCharacter.h"
 #include "RTSUnitCharacter.h"
 #include "RTSUnitInfoWidget.h"
+#include "RTSVictorySubsystem.h"
 #include "RTSCameraPawn.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/InputComponent.h"
 #include "CollisionQueryParams.h"
 #include "InputCoreTypes.h"
 #include "Components/Widget.h"
+#include "Kismet/GameplayStatics.h"
 
 static const float TraceDistance = 50000.f;
 
@@ -52,8 +55,19 @@ void ARTSPlayerController::BeginPlay()
 		UnitInfo->SetVisibility(ESlateVisibility::Visible);
 		UnitInfo->RefreshFromUnit(nullptr);
 	}
+
+	// P2 Phase 6: Subscribe to Win/Lose for feedback.
+	if (UGameInstance* GI = GetWorld()->GetGameInstance())
+	{
+		if (URTSVictorySubsystem* Victory = GI->GetSubsystem<URTSVictorySubsystem>())
+		{
+			Victory->OnGameWon.AddDynamic(this, &ARTSPlayerController::OnGameWon);
+			Victory->OnGameLost.AddDynamic(this, &ARTSPlayerController::OnGameLost);
+		}
+	}
 }
 
+// GDD: Selection is owned by PlayerController; only units in Hero/Captain command range receive new orders; orders persist when leaving range.
 void ARTSPlayerController::SetSelection(ARTSUnitCharacter* Unit)
 {
 	for (const TWeakObjectPtr<ARTSUnitCharacter>& Ptr : SelectedUnits)
@@ -188,13 +202,17 @@ void ARTSPlayerController::SetupInputComponent()
 		return;
 	}
 
-	// Epic 2: LMB = select, Shift+LMB = add select, RMB = context order.
-	InputComponent->BindKey(EKeys::LeftMouseButton, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputSelect);
+	// P1: LMB pressed = store for box/drag; LMB released = single select or box select. RMB = context order.
+	InputComponent->BindKey(EKeys::LeftMouseButton, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputSelectPressed);
+	InputComponent->BindKey(EKeys::LeftMouseButton, EInputEvent::IE_Released, this, &ARTSPlayerController::OnInputSelectReleased);
 	InputComponent->BindKey(EKeys::RightMouseButton, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputOrderContext);
 
 	// Zoom: MouseScrollUp / MouseScrollDown (UE 5.4+; was MouseWheelUp/MouseWheelDown in older).
 	InputComponent->BindKey(EKeys::MouseScrollUp, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnZoomIn);
 	InputComponent->BindKey(EKeys::MouseScrollDown, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnZoomOut);
+
+	// P2 Phase 5: Secure Region – key S when Hero selected.
+	InputComponent->BindKey(EKeys::S, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputSecureRegion);
 
 	// Pitch: MiddleMouse held + drag (PlayerTick).
 }
@@ -203,16 +221,20 @@ void ARTSPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
 
-	// Command range indicator: draw circle when Hero/Captain selected.
+	// Command range indicator: draw circle when Hero/Captain selected (skip when game over).
 	UWorld* World = GetWorld();
 	if (World)
 	{
-		ARTSUnitCharacter* Issuer = GetOrderIssuer();
-		URTSCommandAuthorityComponent* Authority = Issuer ? (Cast<ARTSHeroCharacter>(Issuer) ? Cast<ARTSHeroCharacter>(Issuer)->CommandAuthorityComponent : Issuer->CommandAuthorityComponent) : nullptr;
-		if (Authority && Authority->bAuthorityEnabled && Authority->CommandRadius > 0.f)
+		URTSVictorySubsystem* Victory = World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<URTSVictorySubsystem>() : nullptr;
+		if (!Victory || !Victory->IsGameOver())
 		{
-			const FVector Center = Issuer->GetActorLocation();
-			DrawDebugCircle(World, Center, Authority->CommandRadius, 32, FColor::Cyan, false, 0.f, 0, 2.f);
+			ARTSUnitCharacter* Issuer = GetOrderIssuer();
+			URTSCommandAuthorityComponent* Authority = Issuer ? (Cast<ARTSHeroCharacter>(Issuer) ? Cast<ARTSHeroCharacter>(Issuer)->CommandAuthorityComponent : Issuer->CommandAuthorityComponent) : nullptr;
+			if (Authority && Authority->bAuthorityEnabled && Authority->CommandRadius > 0.f)
+			{
+				const FVector Center = Issuer->GetActorLocation();
+				DrawDebugCircle(World, Center, Authority->CommandRadius, 32, FColor::Cyan, false, 0.f, 0, 2.f);
+			}
 		}
 	}
 
@@ -266,8 +288,41 @@ void ARTSPlayerController::OnZoomOut()
 	}
 }
 
-void ARTSPlayerController::OnInputSelect()
+void ARTSPlayerController::OnInputSelectPressed()
 {
+	float MouseX = 0.f, MouseY = 0.f;
+	if (GetMousePosition(MouseX, MouseY))
+	{
+		BoxSelectPressScreenPos = FVector2D(MouseX, MouseY);
+		bBoxSelectActive = true;
+	}
+}
+
+void ARTSPlayerController::OnInputSelectReleased()
+{
+	if (!bBoxSelectActive) return;
+	bBoxSelectActive = false;
+
+	float MouseX = 0.f, MouseY = 0.f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return;
+	}
+	FVector2D ReleasePos(MouseX, MouseY);
+	const float DragThresholdPx = 5.f;
+	const float DragDist = FVector2D::Distance(BoxSelectPressScreenPos, ReleasePos);
+
+	if (DragDist >= DragThresholdPx)
+	{
+		// Box select: min/max screen rect
+		FVector2D ScreenMin(FMath::Min(BoxSelectPressScreenPos.X, ReleasePos.X), FMath::Min(BoxSelectPressScreenPos.Y, ReleasePos.Y));
+		FVector2D ScreenMax(FMath::Max(BoxSelectPressScreenPos.X, ReleasePos.X), FMath::Max(BoxSelectPressScreenPos.Y, ReleasePos.Y));
+		const bool bAdd = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+		ApplyBoxSelect(ScreenMin, ScreenMax, bAdd);
+		return;
+	}
+
+	// Single click: same behavior as before (select unit under cursor or clear).
 	FVector Loc;
 	ARTSUnitCharacter* Unit = nullptr;
 	AActor* Actor = nullptr;
@@ -289,6 +344,42 @@ void ARTSPlayerController::OnInputSelect()
 	else
 	{
 		ClearSelection();
+	}
+}
+
+void ARTSPlayerController::ApplyBoxSelect(const FVector2D& ScreenMin, const FVector2D& ScreenMax, bool bAddToSelection)
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(World, ARTSUnitCharacter::StaticClass(), Found);
+
+	TArray<ARTSUnitCharacter*> InBox;
+	for (AActor* A : Found)
+	{
+		ARTSUnitCharacter* U = Cast<ARTSUnitCharacter>(A);
+		if (!U || !IsValid(U)) continue;
+
+		FVector2D ScreenPos;
+		if (ProjectWorldLocationToScreen(U->GetActorLocation(), ScreenPos))
+		{
+			if (ScreenPos.X >= ScreenMin.X && ScreenPos.X <= ScreenMax.X && ScreenPos.Y >= ScreenMin.Y && ScreenPos.Y <= ScreenMax.Y)
+			{
+				InBox.Add(U);
+			}
+		}
+	}
+
+	if (InBox.Num() == 0) return;
+
+	if (!bAddToSelection)
+	{
+		ClearSelection();
+	}
+	for (ARTSUnitCharacter* U : InBox)
+	{
+		AddToSelection(U);
 	}
 }
 
@@ -333,6 +424,7 @@ void ARTSPlayerController::OnInputOrderContext()
 		{
 			continue;
 		}
+		// GDD: new orders require unit to be in issuer command radius; existing orders persist when unit leaves range.
 		if (!Authority->CanIssueOrderToUnit(Unit))
 		{
 			continue;
@@ -367,6 +459,54 @@ void ARTSPlayerController::OnInputOrderContext()
 			Unit->SetCurrentOrder(ERTSOrderType::Move, Payload);
 		}
 	}
+}
+
+void ARTSPlayerController::OnInputSecureRegion()
+{
+	if (UGameInstance* GI = GetWorld()->GetGameInstance())
+	{
+		if (URTSVictorySubsystem* Victory = GI->GetSubsystem<URTSVictorySubsystem>())
+		{
+			if (Victory->IsGameOver()) return;
+		}
+	}
+	ARTSUnitCharacter* Issuer = GetOrderIssuer();
+	ARTSHeroCharacter* Hero = Issuer ? Cast<ARTSHeroCharacter>(Issuer) : nullptr;
+	if (!Hero)
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("[RTS] Select a Hero to Secure Region (key S)"));
+		return;
+	}
+	if (Hero->TryStartSecureRegion())
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 3.f, FColor::Green, TEXT("[RTS] Secure Region started – hold position 15s"));
+	}
+	else
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange, TEXT("[RTS] Cannot Secure: Hero must be in region, control 4, not contested"));
+	}
+}
+
+void ARTSPlayerController::OnGameWon(EFactionId Faction)
+{
+	if (GEngine)
+	{
+		FText FactionName = Faction == EFactionId::Humans ? FText::FromString(TEXT("Humans")) :
+			Faction == EFactionId::Vampires ? FText::FromString(TEXT("Vampires")) : FText::FromString(TEXT("Werewolves"));
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 10.f, FColor::Green, FString::Printf(TEXT("*** VICTORY! %s ***"), *FactionName.ToString()));
+	}
+	SetPause(true);
+}
+
+void ARTSPlayerController::OnGameLost(EFactionId Faction)
+{
+	if (GEngine)
+	{
+		FText FactionName = Faction == EFactionId::Humans ? FText::FromString(TEXT("Humans")) :
+			Faction == EFactionId::Vampires ? FText::FromString(TEXT("Vampires")) : FText::FromString(TEXT("Werewolves"));
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 10.f, FColor::Red, FString::Printf(TEXT("*** DEFEAT! %s ***"), *FactionName.ToString()));
+	}
+	SetPause(true);
 }
 
 ARTSUnitCharacter* ARTSPlayerController::GetOrderIssuer() const
