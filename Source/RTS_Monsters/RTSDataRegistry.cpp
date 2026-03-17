@@ -160,3 +160,28 @@ bool URTSDataRegistry::GetUnitRowForHero(const FHeroRow& HeroRow, FUnitRow& OutU
 	OutUnitRow.Rank = 1; // Heroes are not promoted to Captain.
 	return true;
 }
+
+FName URTSDataRegistry::GetFirstRecruitableUnitIdForFaction(EFactionId Faction) const
+{
+	if (!UnitsTable)
+	{
+		return NAME_None;
+	}
+	for (const auto& Pair : UnitsTable->GetRowMap())
+	{
+		const FUnitRow* Row = reinterpret_cast<const FUnitRow*>(Pair.Value);
+		if (!Row || Row->Faction != Faction)
+		{
+			continue;
+		}
+		if (Faction == EFactionId::Humans && Row->RecruitCostMoney > 0)
+		{
+			return Row->UnitId;
+		}
+		if ((Faction == EFactionId::Vampires || Faction == EFactionId::Werewolves) && Row->ConvertPopulationCost > 0)
+		{
+			return Row->UnitId;
+		}
+	}
+	return NAME_None;
+}

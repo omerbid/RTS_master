@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "RTSDataTypes.h"
+#include "RTSDayNightSubsystem.h"
 #include "RTSUnitInfoWidget.h"
 #include "RTSPlayerController.generated.h"
 
@@ -41,6 +42,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RTS|Input")
 	bool GetHitUnderCursor(FVector& OutLocation, ARTSUnitCharacter*& OutUnit, AActor*& OutActor);
 
+	UFUNCTION(BlueprintPure, Category = "RTS|Selection")
+	bool IsBoxSelectActive() const { return bBoxSelectActive; }
+
+	UFUNCTION(BlueprintPure, Category = "RTS|Selection")
+	FVector2D GetBoxSelectPressPos() const { return BoxSelectPressScreenPos; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -55,14 +62,24 @@ private:
 	void OnZoomIn();
 	void OnZoomOut();
 
-	/** P2 Phase 5: Secure Region – key S when Hero selected. */
+	/** P2 Phase 5: Secure Region – key G when Hero selected (S conflicts with camera). */
 	void OnInputSecureRegion();
+
+	/** P4: Recruit – key R when Hero selected. Recruits default unit for faction. */
+	void OnInputRecruit();
+
+	/** P5: Perform Ritual – key B when respawn timer ended. Starts 10s channel then spawns Hero in best region. */
+	void OnInputPerformRitual();
 
 	/** P2 Phase 6: Win/Lose feedback. */
 	UFUNCTION()
 	void OnGameWon(EFactionId Faction);
 	UFUNCTION()
 	void OnGameLost(EFactionId Faction);
+
+	/** P6: Day/Night phase change feedback. */
+	UFUNCTION()
+	void OnDayNightPhaseChanged(ERTSDayNightPhase NewPhase);
 
 	/** Pick issuer from selection (Hero preferred, else first unit with command authority). */
 	ARTSUnitCharacter* GetOrderIssuer() const;

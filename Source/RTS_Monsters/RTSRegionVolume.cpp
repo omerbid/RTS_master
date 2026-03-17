@@ -18,8 +18,8 @@ ARTSRegionVolume::ARTSRegionVolume()
 	ControlLevelVampires = 0;
 	ControlLevelWerewolves = 0;
 
-	Population = 0;
-	Stability = 0.f;
+	Population = 100;  // P4: Default for Vampire/Werewolf conversion; set in level for balance
+	Stability = 50.f;
 	DominantFaction = EFactionId::Humans;
 }
 

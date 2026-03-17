@@ -76,6 +76,16 @@ enum class ERTSOrderType : uint8
 	Attack UMETA(DisplayName = "Attack")
 };
 
+/** Phase 3: Human NPC state (CORE_GAME_MECHANICS, PROJECT_BRAIN). */
+UENUM(BlueprintType)
+enum class EHumanNPCState : uint8
+{
+	Idle     UMETA(DisplayName = "Idle"),
+	Working  UMETA(DisplayName = "Working"),
+	Fleeing  UMETA(DisplayName = "Fleeing"),
+	Captured UMETA(DisplayName = "Captured")
+};
+
 /** Payload for Move (destination) or Attack (target). */
 USTRUCT(BlueprintType)
 struct FRTSOrderPayload
@@ -131,8 +141,21 @@ struct FUnitRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	float MoraleBase = 60.f;
 
+	/** Upkeep per turn in faction resource: money (Humans), blood (Vampires), flesh (Werewolves). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Upkeep = 1;
+
+	/** Humans: cost in money to recruit. 0 = not recruitable by Humans. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 RecruitCostMoney = 50;
+
+	/** Cost in NPC/population to recruit: Humans (e.g. militia), Monsters (conversion). 0 = not using population. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 ConvertPopulationCost = 20;
+
+	/** Monsters: cost in faction resource to recruit — blood (Vampires), flesh (Werewolves). 0 = Humans or not recruitable by resource. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 RecruitCostResource = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	ESpecialTag Special = ESpecialTag::None;
@@ -144,6 +167,10 @@ struct FUnitRow : public FTableRowBase
 	/** Rank 1–3; Rank ≥ 3 eligible for Captain promotion (P3). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Rank = 1;
+
+	/** Unit level for morale contribution band (Level 1: 0.75–1.0, Level 2: 0.85–1.15, etc.). Default 1. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 Level = 1;
 };
 
 USTRUCT(BlueprintType)
@@ -178,6 +205,10 @@ struct FHeroRow : public FTableRowBase
 	// Simple MVP aura
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	float MoraleAura = 0.f;
+
+	/** Command radius in UU. If > 0, overrides component default (2500). Data-driven (GAP_ANALYSIS). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0"))
+	float CommandRadius = 0.f;
 
 	// XP curve table identifier
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)

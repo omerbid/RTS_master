@@ -34,7 +34,10 @@ void ARTSHeroCharacter::InitializeFromHeroRow(const FHeroRow& HeroRow, const FUn
 	// Initialize base unit data first.
 	InitializeFromUnitRow(AsUnitRow);
 
-	// Command radius will be tuned later; for now we leave default from component.
+	if (CommandAuthorityComponent && HeroRow.CommandRadius > 0.f)
+	{
+		CommandAuthorityComponent->CommandRadius = HeroRow.CommandRadius;
+	}
 }
 
 bool ARTSHeroCharacter::InitializeFromRegistry()

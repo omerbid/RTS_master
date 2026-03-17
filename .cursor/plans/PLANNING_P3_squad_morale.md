@@ -1,8 +1,33 @@
 # Plan: P3 Squad + Morale (Container, 0–100, Detached Behavior)
 
 **Created**: 2026-03  
-**Status**: Draft  
+**Status**: **Implemented**  
 **GDD**: `.cursor/GDD.md` (Combat Rules, Morale 0–100, Detached units, Captain, MVP Locked Values P3)
+
+---
+
+## Implementation status (current codebase)
+
+| Epic | Status | Main files / APIs |
+|------|--------|-------------------|
+| **Epic 1 – Squad container** | Done | `RTSSquadState` (CaptainUnit, SetCaptain, AddMember/RemoveMember, ApplyMoraleDeltaToAll); `RTSSquadManagerSubsystem` (GetOrCreateSquadForFaction, AddUnitToFactionSquad); `RTSUnitCharacter` (SquadReference, SetSquad). Unit `BeginPlay` → AddUnitToFactionSquad; `Destroyed` → Captain -10, RemoveMember, casualty -5. |
+| **Epic 2 – Morale thresholds** | Done | `RTSUnitCharacter`: UpdateMoraleEffects (1s) – MaxWalkSpeed × 0.85 when morale &lt; 30; GetOrderResponsivenessMultiplier; `RTSOrderComponent` uses it in TickMove. Morale &lt; 15: 20% every 5s → TickLowMoraleAutoRetreat (in UpdateDetachedAndDrain). |
+| **Epic 3 – Morale sources** | Done | Casualty: -5 on member death (ApplyMoraleDeltaToAll). Detached drain: -1/5s in UpdateDetachedAndDrain. Hero presence buff: **optional**, not implemented. |
+| **Epic 4 – Detached behavior** | Done | UpdateDetachedAndDrain (5s): no Hero 2500 / Captain 1200 in range → bIsDetached; drain -1/5s. SetCurrentOrder(Attack) rejected when bIsDetached. |
+| **Epic 5 – Captain** | Done | bIsCaptain, Rank ≥3, TryPromoteToCaptain (adds CommandAuthority 1200, SetCaptain on squad). **Input:** Shift+RMB on selected unit (with Hero as issuer) → TryPromoteToCaptain. Captain death → ApplyMoraleDeltaToAll(-10). |
+
+**Constants in code:** CaptainDeathMoralePenalty = -10, CasualtyMoralePenalty = -5, MoraleThresholdLow = 30, MoraleThresholdCritical = 15, MoraleSpeedMultiplierLow = 0.85, DetachedMoraleDrainPer5s = -1, HeroCommandRadius = 2500, CaptainCommandRadius = 1200.
+
+### Squad morale rating (weighted by Rank / Level)
+
+הסקוואד מחשב **רייטינג מורל משותף** (לא ממוצע פשוט): כל לוחם תורם לפי Rank (ובהמשך Level).  
+**נוסחה:** `rating = sum(morale_i × weight_i) / sum(weight_i)` (ממוצע משוקלל).
+
+- **למה לחלק ב־sum(weight_i) ולא במספר הלוחמים:** כך לוחם וותיק (משקל גבוה) "שווה" יותר לרייטינג – סקוואד עם הרבה טירונים ו־וותיק אחד משקף יותר את המורל של הוותיק.
+- **משקלות (Level + Rank):** Level 1 R1–R5 → 0.75–1.0; Level 2 R1–R5 → 0.85–1.15; Level 3+ R1–R5 → 0.95–1.3. `FUnitRow::Level` + `ARTSUnitCharacter::Level` (מהדאטה); ברירת מחדל 1.
+- **באף/דיבאף:** שאר האפקטים (נפגעים, קפטן, מנותק, אופציונלי גיבור) ממשיכים לחול על **מורל היחיד** (CurrentMorale); רייטינג הסקוואד (AverageMorale) משמש ל־UI וללוגיקה ברמת סקוואד.
+
+**מימוש:** `RTSSquadState::RecalcMorale()` + `GetMoraleContributionWeight(Level, Rank)`; Unit מחזיק `Level` (מ־FUnitRow, ברירת מחדל 1).
 
 ---
 
@@ -83,38 +108,38 @@ Implement P3: **squad as container** (units belong to squads; squad has members,
 
 ### Epic 1: Squad Container & Unit Reference
 
-- [ ] Add `SquadReference` (e.g. `TWeakObjectPtr<URTSSquadState>`) to ARTSUnitCharacter; BlueprintReadOnly getter.
-- [ ] Ensure a squad manager (GameState or subsystem) creates URTSSquadState instances and assigns units (AddMember). On AddMember: set unit->SquadReference = this squad.
-- [ ] On RemoveMember: clear unit->SquadReference (if unit still valid).
-- [ ] When a unit is destroyed (or OnDeath): if SquadReference valid, call RemoveMember(this) and apply casualty morale delta to remaining members (e.g. -5 each or from data).
-- [ ] Add optional **CaptainUnit** (TWeakObjectPtr<ARTSUnitCharacter>) to URTSSquadState; set when a member is promoted to Captain.
+- [x] Add `SquadReference` (e.g. `TWeakObjectPtr<URTSSquadState>`) to ARTSUnitCharacter; BlueprintReadOnly getter.
+- [x] Ensure a squad manager (GameState or subsystem) creates URTSSquadState instances and assigns units (AddMember). On AddMember: set unit->SquadReference = this squad. → **RTSSquadManagerSubsystem**; Unit BeginPlay calls AddUnitToFactionSquad.
+- [x] On RemoveMember: clear unit->SquadReference (if unit still valid).
+- [x] When a unit is destroyed (or OnDeath): if SquadReference valid, call RemoveMember(this) and apply casualty morale delta to remaining members (e.g. -5 each or from data). → Destroyed(): Captain -10, RemoveMember, then ApplyMoraleDeltaToAll(-5).
+- [x] Add optional **CaptainUnit** (TWeakObjectPtr<ARTSUnitCharacter>) to URTSSquadState; set when a member is promoted to Captain.
 
 ### Epic 2: Morale Thresholds (Speed, Responsiveness, Auto-Retreat)
 
-- [ ] Define or read thresholds: &lt;30 (Low), &lt;15 (Critical). Use DT_MoraleThresholds or constants.
-- [ ] **&lt; 30:** Apply -15% move speed (e.g. scale CharacterMovementComponent MaxWalkSpeed by 0.85 when CurrentMorale &lt; 30). Apply -15% order responsiveness (e.g. delay before executing new order, or multiplier on order tick).
-- [ ] **&lt; 15:** Every 5 seconds, with 20% probability, trigger **Auto-Retreat** (cancel current order; issue Move toward friendly Hero or fallback position; or set “retreating” state).
-- [ ] RecalcMorale called when members or their morale change; AverageMorale used for UI or squad-level logic if needed.
+- [x] Define or read thresholds: &lt;30 (Low), &lt;15 (Critical). Use DT_MoraleThresholds or constants.
+- [x] **&lt; 30:** Apply -15% move speed (e.g. scale CharacterMovementComponent MaxWalkSpeed by 0.85 when CurrentMorale &lt; 30). Apply -15% order responsiveness (e.g. delay before executing new order, or multiplier on order tick).
+- [x] **&lt; 15:** Every 5 seconds, with 20% probability, trigger **Auto-Retreat** (cancel current order; issue Move toward friendly Hero or fallback position; or set “retreating” state).
+- [x] RecalcMorale called when members or their morale change; AverageMorale used for UI or squad-level logic if needed.
 
 ### Epic 3: Morale Sources (Casualties, Hero, Detached)
 
-- [ ] **Casualties:** On squad member death, apply morale delta to each remaining member (ApplyMoraleDelta(-5) or from data).
-- [ ] **Hero presence:** Optional: when same-faction Hero in command range, apply small morale recovery or buff (e.g. +0.5/5s up to cap).
-- [ ] **Detached drain:** When unit has no same-faction Hero and no Captain within their command range, apply ApplyMoraleDelta(-1) every 5 seconds. Use timer or subsystem that checks “authority in range” per unit.
+- [x] **Casualties:** On squad member death, apply morale delta to each remaining member (ApplyMoraleDelta(-5) or from data).
+- [ ] **Hero presence:** Optional (not implemented; P3.1): when same-faction Hero in command range, apply small morale recovery or buff (e.g. +0.5/5s up to cap).
+- [x] **Detached drain:** When unit has no same-faction Hero and no Captain within their command range, apply ApplyMoraleDelta(-1) every 5 seconds. Use timer or subsystem that checks “authority in range” per unit.
 
 ### Epic 4: Detached Behavior
 
-- [ ] Define **bIsDetached**: true when no Hero (2500 UU) and no Captain (1200 UU) of same faction in range.
-- [ ] Update bIsDetached periodically (timer 2–5s) or when authorities move; when true, apply detached morale drain (Epic 3).
-- [ ] **Defensive AI only:** When detached, unit does not accept new Attack orders (or cancels Attack and holds/retreats). Optionally: only Hold or Retreat behavior when detached; movement toward friendly allowed.
+- [x] Define **bIsDetached**: true when no Hero (2500 UU) and no Captain (1200 UU) of same faction in range.
+- [x] Update bIsDetached periodically (timer 2–5s) or when authorities move; when true, apply detached morale drain (Epic 3).
+- [x] **Defensive AI only:** When detached, unit does not accept new Attack orders. → SetCurrentOrder(Attack) returns early when bIsDetached.
 
 ### Epic 5: Captain
 
-- [ ] Add **bIsCaptain** to ARTSUnitCharacter (BlueprintReadWrite); default false.
-- [ ] Add **Rank** (1–3) to Unit (from data or runtime); Rank ≥ 3 = eligible for Captain.
-- [ ] Give Captain units **URTSCommandAuthorityComponent** with CommandRadius = 1200 (or add component on promote). P1 already uses 2500 for Hero.
-- [ ] **Promotion input:** Add “Promote to Captain” (e.g. key + click on selected unit, or context menu). Validate: unit is same faction, Rank ≥ 3, not already Captain. Set bIsCaptain = true; set squad->CaptainUnit = this if unit has SquadReference.
-- [ ] **Captain death:** On Captain unit death, before RemoveMember: apply squad morale penalty (e.g. ApplyMoraleDelta(-10) to each member or single squad-wide call). Then RemoveMember(Captain); RecalcMorale.
+- [x] Add **bIsCaptain** to ARTSUnitCharacter (BlueprintReadWrite); default false.
+- [x] Add **Rank** (1–3) to Unit (from data or runtime); Rank ≥ 3 = eligible for Captain.
+- [x] Give Captain units **URTSCommandAuthorityComponent** with CommandRadius = 1200 (or add component on promote). P1 already uses 2500 for Hero.
+- [x] **Promotion input:** Shift+RMB on selected unit (Hero as issuer) → TryPromoteToCaptain. Add “Promote to Captain” (e.g. key + click on selected unit, or context menu). Validate: unit is same faction, Rank ≥ 3, not already Captain. Set bIsCaptain = true; set squad->CaptainUnit = this if unit has SquadReference.
+- [x] **Captain death:** On Captain unit death, before RemoveMember: apply squad morale penalty (e.g. ApplyMoraleDelta(-10) to each member or single squad-wide call). Then RemoveMember(Captain); RecalcMorale.
 
 ---
 
@@ -158,13 +183,18 @@ Implement P3: **squad as container** (units belong to squads; squad has members,
 
 ## 7. Acceptance Criteria
 
-- [ ] Units can be assigned to squads; SquadReference set; squad has Members and optional Captain; RecalcMorale works.
-- [ ] Morale 0–100: &lt;30 gives -15% move and -15% order responsiveness; &lt;15 gives 20% every 5s auto-retreat.
-- [ ] Morale sources: casualties reduce squad morale; detached drain -1/5s; optional Hero buff.
-- [ ] Detached units: defensive only, morale drain; no new Attack when detached.
-- [ ] Captain: Rank ≥3 promotable, 1200 UU, death causes squad morale penalty.
+- [x] Units can be assigned to squads; SquadReference set; squad has Members and optional Captain; RecalcMorale works.
+- [x] Morale 0–100: &lt;30 gives -15% move and -15% order responsiveness; &lt;15 gives 20% every 5s auto-retreat.
+- [x] Morale sources: casualties reduce squad morale; detached drain -1/5s; optional Hero buff (not implemented).
+- [x] Detached units: defensive only, morale drain; no new Attack when detached.
+- [x] Captain: Rank ≥3 promotable, 1200 UU, death causes squad morale penalty.
 
-**Definition of Done (P3):** Squad container with membership and Captain; morale thresholds and sources applied; detached behavior and drain; Captain promote and death penalty.
+**Definition of Done (P3):** Squad container with membership and Captain; morale thresholds and sources applied; detached behavior and drain; Captain promote and death penalty. **Status: Implemented.**
+
+### Optional P3.1 (later)
+- Hero presence morale buff (when Hero in command range).
+- Move morale constants (e.g. -5, -10) to DataTable if desired.
+- Dedicated key binding for "Promote to Captain" (optional; Shift+RMB already works).
 
 ---
 

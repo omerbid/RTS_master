@@ -40,6 +40,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RTS|Order")
 	bool HasOrder() const { return CurrentOrderType != ERTSOrderType::None; }
 
+	/** Execute current order for one frame. Called from Character Tick as fallback when component tick may not run (spawned units). */
+	void ExecuteOrder(float DeltaTime);
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:

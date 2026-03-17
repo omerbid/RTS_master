@@ -126,6 +126,7 @@ No isolated systems.
 
 **Humans:**
 - Use Money for recruitment.
+- **Conscription Decree (צו גיוס):** Player issues decree that sets price for soldiers. People come from city/town/village (and other regions as hero influence grows), offer themselves; player chooses who to recruit. Stronger player → higher chance of higher quality/rank units offering themselves (higher cost and upkeep).
 - Emergency decree cheaper but reduces stability.
 
 **Vampires:**

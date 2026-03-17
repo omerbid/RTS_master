@@ -72,16 +72,18 @@ void URTSUnitInfoWidget::RefreshFromUnit(ARTSUnitCharacter* Unit)
 	float Morale = Unit->MoraleComponent ? Unit->MoraleComponent->CurrentMorale : 0.f;
 	SetTextBlock(TextBlock_Morale, FText::FromString(FString::Printf(TEXT("Morale: %.0f"), Morale)));
 	SetTextBlock(TextBlock_Rank, FText::FromString(FString::Printf(TEXT("Rank: %d"), Unit->Rank)));
-	FString Extra;
+	const float MaxHP = Unit->CachedUnitData.HP;
+	const float CurrentHP = Unit->OverrideHP > 0.f ? Unit->OverrideHP : MaxHP;
+	FString Extra = FString::Printf(TEXT("HP: %.0f/%.0f"), CurrentHP, MaxHP);
 	if (Unit->bIsCaptain)
 	{
-		Extra += TEXT("Captain ");
+		Extra += TEXT(" | Captain");
 	}
 	if (Unit->bIsDetached)
 	{
-		Extra += TEXT("Detached");
+		Extra += TEXT(" | Detached");
 	}
-	SetTextBlock(TextBlock_Extra, FText::FromString(Extra.IsEmpty() ? TEXT("--") : Extra));
+	SetTextBlock(TextBlock_Extra, FText::FromString(Extra));
 }
 
 void URTSUnitInfoWidget::BuildWidgetTree()

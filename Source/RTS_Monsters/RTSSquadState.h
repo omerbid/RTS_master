@@ -25,7 +25,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	EFactionId FactionId;
 
-	/** Cached average morale of the squad. */
+	/** Squad morale rating: weighted average by Rank (and Level when available). Rank 1 contributes less, Rank 3+ more; then buffs/debuffs apply. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Squad")
 	float AverageMorale = 0.f;
 

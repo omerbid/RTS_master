@@ -32,6 +32,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Data")
 	FName UnitId;
 
+	/** Stable instance ID for Save/Load (rehydration, AttackTarget, Captain). Generated in BeginPlay if invalid. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RTS|SaveLoad")
+	FGuid PersistentUnitGuid;
+
+	/** For Save/Load: returns PersistentUnitGuid; used by Rehydration and reference resolution. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RTS|SaveLoad")
+	FGuid GetPersistentUnitGuid() const { return PersistentUnitGuid; }
+	/** For Load: assign restored GUID so references (AttackTarget, Captain) can resolve. */
+	void SetPersistentUnitGuid(FGuid Id) { PersistentUnitGuid = Id; }
+
 	/** Cached unit data row (filled from Registry by UnitId; editable here to override per instance). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Data")
 	FUnitRow CachedUnitData;
@@ -82,6 +92,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Captain")
 	int32 Rank;
 
+	/** Unit level for squad morale contribution band (Level 1: 0.75–1.0, Level 2: 0.85–1.15). From data or progression. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Data")
+	int32 Level = 1;
+
 	/** P3: True when unit is promoted to Captain (has CommandAuthority 1200 UU). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Captain")
 	bool bIsCaptain;
@@ -106,6 +120,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RTS|Morale")
 	float GetOrderResponsivenessMultiplier() const;
 
+	/** P6: 1.1 Vampires at night, 0.95 Vampires at day, 1.0 otherwise. Used in combat (BuildGroupFromUnits). */
+	UFUNCTION(BlueprintPure, Category = "RTS|DayNight")
+	float GetDayNightDamageMultiplier() const;
+
+	/** P6: 1.05 Vampires at night, 0.95 Vampires at day, 1.0 otherwise. Used for MaxWalkSpeed in UpdateMoraleEffects. */
+	UFUNCTION(BlueprintPure, Category = "RTS|DayNight")
+	float GetDayNightMoveSpeedMultiplier() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Destroyed() override;
@@ -120,6 +142,10 @@ protected:
 	/** Flat ring at feet for selection visual. */
 	UPROPERTY(VisibleAnywhere, Category = "RTS|Selection")
 	TObjectPtr<UStaticMeshComponent> SelectionRingMesh;
+
+	/** Visible body when no SkeletalMesh set (Blueprints can hide this). Spawned units need visible shape. */
+	UPROPERTY(VisibleAnywhere, Category = "RTS|Visual")
+	TObjectPtr<UStaticMeshComponent> BodyMeshComponent;
 
 	FTimerHandle TimerHandleMoraleUpdate;
 	FTimerHandle TimerHandleDetachedAndDrain;

@@ -56,6 +56,26 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
 	static ARTSRegionVolume* GetRegionAtLocation(const UObject* WorldContextObject, FVector WorldLocation);
 
+	/** Stable identity for save/load and serialization (GAP_ANALYSIS). Set in editor or level; used to map saved state to Region actor. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
+	FName GetRegionId() const { return RegionId; }
+
+	/** Set stable RegionId (e.g. from level or save). */
+	UFUNCTION(BlueprintCallable, Category = "Region")
+	void SetRegionId(FName InRegionId) { RegionId = InRegionId; }
+
+	/** P4 Economy: Population for recruitment conversion (Vampires/Werewolves). */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
+	int32 GetPopulation() const { return Population; }
+
+	/** P4 Economy: Set Population (e.g. when converting). */
+	UFUNCTION(BlueprintCallable, Category = "Region")
+	void SetPopulation(int32 InPopulation) { Population = FMath::Max(0, InPopulation); }
+
+	/** P4 Economy: Stability for Money rate (Humans). */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
+	float GetStability() const { return Stability; }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -68,6 +88,10 @@ protected:
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	void EvaluateControlGain();
+
+	/** Stable identity for save/load (GAP_ANALYSIS). Set per region in level; default from actor label if empty. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region")
+	FName RegionId;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Region")

@@ -2,11 +2,12 @@
 
 #include "RTSDataRegistry.h"
 #include "RTSUnitCharacter.h"
+#include "RTSCombatManagerSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 URTSOrderComponent::URTSOrderComponent()
 {
-	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bCanEverTick = false;  // Orders executed by RTSOrderManagerSubsystem (centralized)
 }
 
 void URTSOrderComponent::BeginPlay()
@@ -31,10 +32,8 @@ void URTSOrderComponent::ClearOrder(bool bApplyPostCombatBehavior)
 	}
 }
 
-void URTSOrderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void URTSOrderComponent::ExecuteOrder(float DeltaTime)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
 	switch (CurrentOrderType)
 	{
 	case ERTSOrderType::Move:
@@ -46,6 +45,12 @@ void URTSOrderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	default:
 		break;
 	}
+}
+
+void URTSOrderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	ExecuteOrder(DeltaTime);
 }
 
 void URTSOrderComponent::TickMove(float DeltaTime)
@@ -76,7 +81,10 @@ void URTSOrderComponent::TickMove(float DeltaTime)
 
 	const float Responsiveness = Unit->GetOrderResponsivenessMultiplier();
 	FVector Dir = (Dest - Loc).GetSafeNormal2D();
-	Movement->AddInputVector(Dir * Movement->GetMaxSpeed() * Responsiveness);
+	const float Speed = Movement->GetMaxSpeed() * Responsiveness * DeltaTime;
+	// Direct move: unpossessed RTS units ignore AddInputVector/AddMovementInput; SetActorLocation always works
+	FVector NewLoc = Loc + Dir * Speed;
+	Unit->SetActorLocation(NewLoc, true);
 }
 
 void URTSOrderComponent::TickAttack(float DeltaTime)
@@ -98,8 +106,25 @@ void URTSOrderComponent::TickAttack(float DeltaTime)
 
 	if (DistSq <= AttackRangeSq)
 	{
-		// In range: hold and "attack" (stub – no damage yet). When target dies, caller or timer can clear order.
-		// For P1 we simply clear when target becomes invalid.
+		// In range: start combat if target is RTS unit and not already in combat
+		ARTSUnitCharacter* TargetUnit = Cast<ARTSUnitCharacter>(Target);
+		if (TargetUnit && TargetUnit->FactionId != Unit->FactionId)
+		{
+			UWorld* World = Unit->GetWorld();
+			if (World)
+			{
+				if (URTSCombatManagerSubsystem* CombatMgr = World->GetSubsystem<URTSCombatManagerSubsystem>())
+				{
+					if (!CombatMgr->IsUnitInCombat(Unit) && !CombatMgr->IsUnitInCombat(TargetUnit))
+					{
+						TArray<ARTSUnitCharacter*> SideA, SideB;
+						SideA.Add(Unit);
+						SideB.Add(TargetUnit);
+						CombatMgr->StartCombat(SideA, SideB, (Loc + TargetLoc) * 0.5f);
+					}
+				}
+			}
+		}
 		return;
 	}
 
@@ -108,7 +133,8 @@ void URTSOrderComponent::TickAttack(float DeltaTime)
 	if (Movement)
 	{
 		FVector Dir = (TargetLoc - Loc).GetSafeNormal2D();
-		Movement->AddInputVector(Dir * Movement->GetMaxSpeed());
+		const float Speed = Movement->GetMaxSpeed() * DeltaTime;
+		Unit->SetActorLocation(Loc + Dir * Speed, true);
 	}
 }
 

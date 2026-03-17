@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RTS|Data")
 	bool GetUnitRowForHero(const FHeroRow& HeroRow, FUnitRow& OutUnitRow) const;
 
+	/** P4: Get first recruitable UnitId for faction. Humans: RecruitCostMoney>0; Vampires/Werewolves: ConvertPopulationCost>0. */
+	UFUNCTION(BlueprintCallable, Category = "RTS|Data")
+	FName GetFirstRecruitableUnitIdForFaction(EFactionId Faction) const;
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 private:

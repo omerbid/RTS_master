@@ -48,10 +48,34 @@ TArray<ARTSUnitCharacter*> URTSSquadState::GetMembers() const
 	return Out;
 }
 
+// Squad morale contribution weight by Level and Rank. Level 1 R1–R5 → 0.75–1.0; Level 2 → 0.85–1.15; Level 3+ → 0.95–1.3.
+static float GetMoraleContributionWeight(int32 Level, int32 Rank)
+{
+	const int32 L = FMath::Max(1, Level);
+	const int32 R = FMath::Clamp(Rank, 1, 5);
+	float MinW, Range;
+	if (L == 1)
+	{
+		MinW = 0.75f;
+		Range = 0.25f;   // 0.75 .. 1.0
+	}
+	else if (L == 2)
+	{
+		MinW = 0.85f;
+		Range = 0.3f;    // 0.85 .. 1.15
+	}
+	else
+	{
+		MinW = 0.95f;
+		Range = 0.35f;   // 0.95 .. 1.3 for Level 3+
+	}
+	return MinW + (R - 1) * (Range / 4.f);
+}
+
 void URTSSquadState::RecalcMorale()
 {
-	float Sum = 0.f;
-	int32 Count = 0;
+	float WeightedSum = 0.f;
+	float TotalWeight = 0.f;
 
 	for (const TWeakObjectPtr<ARTSUnitCharacter>& WeakUnit : Members)
 	{
@@ -61,14 +85,19 @@ void URTSSquadState::RecalcMorale()
 			continue;
 		}
 
-		if (const URTSMoraleComponent* MoraleComp = Unit->FindComponentByClass<URTSMoraleComponent>())
+		const URTSMoraleComponent* MoraleComp = Unit->FindComponentByClass<URTSMoraleComponent>();
+		if (!MoraleComp)
 		{
-			Sum += MoraleComp->CurrentMorale;
-			++Count;
+			continue;
 		}
+
+		const float W = GetMoraleContributionWeight(Unit->Level, Unit->Rank);
+		WeightedSum += MoraleComp->CurrentMorale * W;
+		TotalWeight += W;
 	}
 
-	AverageMorale = (Count > 0) ? Sum / static_cast<float>(Count) : 0.f;
+	// Weighted average: rating = sum(morale_i * weight_i) / sum(weight_i). Buffs/debuffs apply on top of this base.
+	AverageMorale = (TotalWeight > 0.f) ? (WeightedSum / TotalWeight) : 0.f;
 }
 
 void URTSSquadState::ApplyMoraleDeltaToAll(float Delta)

@@ -1,10 +1,14 @@
 #include "RTSPlayerController.h"
 
 #include "RTSCommandAuthorityComponent.h"
+#include "RTSDayNightSubsystem.h"
 #include "RTSHeroCharacter.h"
 #include "RTSUnitCharacter.h"
 #include "RTSUnitInfoWidget.h"
 #include "RTSVictorySubsystem.h"
+#include "RTSEconomySubsystem.h"
+#include "RTSDataRegistry.h"
+#include "RTSRegionVolume.h"
 #include "RTSCameraPawn.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
@@ -63,6 +67,17 @@ void ARTSPlayerController::BeginPlay()
 		{
 			Victory->OnGameWon.AddDynamic(this, &ARTSPlayerController::OnGameWon);
 			Victory->OnGameLost.AddDynamic(this, &ARTSPlayerController::OnGameLost);
+		}
+		// P6: Day/Night phase change feedback.
+		if (URTSDayNightSubsystem* DayNight = GI->GetSubsystem<URTSDayNightSubsystem>())
+		{
+			DayNight->OnDayNightPhaseChanged.AddDynamic(this, &ARTSPlayerController::OnDayNightPhaseChanged);
+			// Show current phase once at start.
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(INDEX_NONE, 5.f, FColor::Cyan,
+					DayNight->IsNight() ? TEXT("[Day/Night] Night") : TEXT("[Day/Night] Day"));
+			}
 		}
 	}
 }
@@ -211,8 +226,14 @@ void ARTSPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::MouseScrollUp, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnZoomIn);
 	InputComponent->BindKey(EKeys::MouseScrollDown, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnZoomOut);
 
-	// P2 Phase 5: Secure Region – key S when Hero selected.
-	InputComponent->BindKey(EKeys::S, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputSecureRegion);
+	// P2 Phase 5: Secure Region – key G when Hero selected (S conflicts with camera backward).
+	InputComponent->BindKey(EKeys::G, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputSecureRegion);
+
+	// P4: Recruit – key R when Hero selected.
+	InputComponent->BindKey(EKeys::R, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputRecruit);
+
+	// P5: Perform Ritual – key B when respawn available (after Hero death, 90s timer ended).
+	InputComponent->BindKey(EKeys::B, EInputEvent::IE_Pressed, this, &ARTSPlayerController::OnInputPerformRitual);
 
 	// Pitch: MiddleMouse held + drag (PlayerTick).
 }
@@ -461,6 +482,48 @@ void ARTSPlayerController::OnInputOrderContext()
 	}
 }
 
+void ARTSPlayerController::OnInputRecruit()
+{
+	if (UGameInstance* GI = GetWorld()->GetGameInstance())
+	{
+		if (URTSVictorySubsystem* Victory = GI->GetSubsystem<URTSVictorySubsystem>())
+		{
+			if (Victory->IsGameOver()) return;
+		}
+	}
+	ARTSUnitCharacter* Issuer = GetOrderIssuer();
+	ARTSHeroCharacter* Hero = Issuer ? Cast<ARTSHeroCharacter>(Issuer) : nullptr;
+	if (!Hero)
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("[RTS] Select a Hero to recruit (key R)"));
+		return;
+	}
+	UGameInstance* GI = GetWorld()->GetGameInstance();
+	if (!GI) return;
+	URTSDataRegistry* Registry = GI->GetSubsystem<URTSDataRegistry>();
+	URTSEconomySubsystem* Economy = GI->GetSubsystem<URTSEconomySubsystem>();
+	if (!Registry || !Economy)
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Red, TEXT("[RTS] Economy system not available"));
+		return;
+	}
+	FName UnitId = Registry->GetFirstRecruitableUnitIdForFaction(Hero->FactionId);
+	if (UnitId == NAME_None)
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange, TEXT("[RTS] No recruitable unit for this faction"));
+		return;
+	}
+	if (ARTSUnitCharacter* NewUnit = Economy->TryRecruitUnit(Hero, UnitId))
+	{
+		AddToSelection(NewUnit);  // Add to selection so it can receive move orders
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 3.f, FColor::Green, FString::Printf(TEXT("[RTS] Unit recruited: %s"), *UnitId.ToString()));
+	}
+	else
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange, TEXT("[RTS] Cannot recruit: not enough resources or Hero not in region"));
+	}
+}
+
 void ARTSPlayerController::OnInputSecureRegion()
 {
 	if (UGameInstance* GI = GetWorld()->GetGameInstance())
@@ -474,7 +537,7 @@ void ARTSPlayerController::OnInputSecureRegion()
 	ARTSHeroCharacter* Hero = Issuer ? Cast<ARTSHeroCharacter>(Issuer) : nullptr;
 	if (!Hero)
 	{
-		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("[RTS] Select a Hero to Secure Region (key S)"));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("[RTS] Select a Hero to Secure Region (key G)"));
 		return;
 	}
 	if (Hero->TryStartSecureRegion())
@@ -484,6 +547,29 @@ void ARTSPlayerController::OnInputSecureRegion()
 	else
 	{
 		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange, TEXT("[RTS] Cannot Secure: Hero must be in region, control 4, not contested"));
+	}
+}
+
+void ARTSPlayerController::OnInputPerformRitual()
+{
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	if (!GI) return;
+	URTSVictorySubsystem* Victory = GI->GetSubsystem<URTSVictorySubsystem>();
+	if (!Victory || Victory->IsGameOver()) return;
+
+	EFactionId Faction;
+	if (!Victory->GetFactionWithRitualAvailable(Faction))
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("[RTS] No respawn ritual available (key B). Wait for timer after Hero death."));
+		return;
+	}
+	if (Victory->StartRitualChannel(Faction))
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Cyan, TEXT("[RTS] Ritual started – 10s to respawn Hero"));
+	}
+	else
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange, TEXT("[RTS] Cannot start ritual"));
 	}
 }
 
@@ -509,6 +595,15 @@ void ARTSPlayerController::OnGameLost(EFactionId Faction)
 	SetPause(true);
 }
 
+void ARTSPlayerController::OnDayNightPhaseChanged(ERTSDayNightPhase NewPhase)
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Cyan,
+			NewPhase == ERTSDayNightPhase::Night ? TEXT("[Day/Night] Night falls") : TEXT("[Day/Night] Dawn"));
+	}
+}
+
 ARTSUnitCharacter* ARTSPlayerController::GetOrderIssuer() const
 {
 	// P1: issuer = first Hero in selection. P3: else first Captain (unit with CommandAuthorityComponent).
@@ -527,6 +622,20 @@ ARTSUnitCharacter* ARTSPlayerController::GetOrderIssuer() const
 		if (U->CommandAuthorityComponent)
 		{
 			return U; // Captain
+		}
+	}
+
+	// No Hero/Captain in selection: find Hero of first selected unit's faction (so player can order recruited units).
+	ARTSUnitCharacter* FirstSelected = SelectedUnits.Num() > 0 ? SelectedUnits[0].Get() : nullptr;
+	if (FirstSelected && GetWorld())
+	{
+		for (TActorIterator<ARTSHeroCharacter> It(GetWorld()); It; ++It)
+		{
+			ARTSHeroCharacter* Hero = *It;
+			if (IsValid(Hero) && Hero->FactionId == FirstSelected->FactionId && Hero->CommandAuthorityComponent)
+			{
+				return Hero;
+			}
 		}
 	}
 	return nullptr;

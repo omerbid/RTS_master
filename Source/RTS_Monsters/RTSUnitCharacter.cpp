@@ -1,6 +1,7 @@
 #include "RTSUnitCharacter.h"
 
 #include "RTSCommandAuthorityComponent.h"
+#include "RTSDayNightSubsystem.h"
 #include "RTSHeroCharacter.h"
 #include "RTSSquadState.h"
 #include "RTSSquadManagerSubsystem.h"
@@ -23,6 +24,10 @@ static constexpr float MoraleSpeedMultiplierLow = 0.85f;
 static constexpr float DetachedMoraleDrainPer5s = -1.f;
 static constexpr float CasualtyMoralePenalty = -5.f;
 static constexpr float CaptainDeathMoralePenalty = -10.f;
+static constexpr float VampireNightDamageMultiplier = 1.1f;
+static constexpr float VampireDayDamageMultiplier = 0.95f;
+static constexpr float VampireNightMoveMultiplier = 1.05f;
+static constexpr float VampireDayMoveMultiplier = 0.95f;
 
 ARTSUnitCharacter::ARTSUnitCharacter()
 	: Rank(1)
@@ -50,16 +55,37 @@ ARTSUnitCharacter::ARTSUnitCharacter()
 		SelectionRingMesh->SetStaticMesh(Cylinder);
 		SelectionRingMesh->SetRelativeScale3D(FVector(1.5f, 1.5f, 0.02f));
 	}
+
+	// Body mesh: visible capsule so spawned units are always visible (Blueprint can override/hide).
+	BodyMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
+	BodyMeshComponent->SetupAttachment(GetCapsuleComponent());
+	BodyMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder")))
+	{
+		BodyMeshComponent->SetStaticMesh(Cylinder);
+		BodyMeshComponent->SetRelativeScale3D(FVector(0.5f, 0.5f, 1.8f));  // Capsule-like (radius ~25, height ~180)
+	}
 }
 
 void ARTSUnitCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (!PersistentUnitGuid.IsValid())
+	{
+		PersistentUnitGuid = FGuid::NewGuid();
+	}
+
 	// Ensure capsule blocks Visibility (Blueprint may override constructor; reapply here).
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
+
+	// Hide BodyMesh if Blueprint has a SkeletalMesh (avoid double body).
+	if (BodyMeshComponent && GetMesh() && GetMesh()->GetSkeletalMeshAsset())
+	{
+		BodyMeshComponent->SetVisibility(false);
 	}
 
 	// Position selection ring at feet.
@@ -149,6 +175,7 @@ void ARTSUnitCharacter::InitializeFromUnitRow(const FUnitRow& UnitRow)
 	FactionId = UnitRow.Faction;
 	UnitId = UnitRow.UnitId;
 	Rank = UnitRow.Rank;
+	Level = FMath::Max(1, UnitRow.Level);
 
 	if (MoraleComponent)
 	{
@@ -242,6 +269,12 @@ void ARTSUnitCharacter::SetSelected(bool bSelected)
 		SkelMesh->SetRenderCustomDepth(bSelected);
 		SkelMesh->SetCustomDepthStencilValue(bSelected ? 1 : 0);
 	}
+	// Body mesh (for spawned units without SkeletalMesh) – selection outline
+	if (BodyMeshComponent)
+	{
+		BodyMeshComponent->SetRenderCustomDepth(bSelected);
+		BodyMeshComponent->SetCustomDepthStencilValue(bSelected ? 1 : 0);
+	}
 }
 
 float ARTSUnitCharacter::GetOrderResponsivenessMultiplier() const
@@ -253,6 +286,30 @@ float ARTSUnitCharacter::GetOrderResponsivenessMultiplier() const
 	return MoraleComponent->CurrentMorale < MoraleThresholdLow ? MoraleSpeedMultiplierLow : 1.f;
 }
 
+float ARTSUnitCharacter::GetDayNightDamageMultiplier() const
+{
+	if (FactionId != EFactionId::Vampires) return 1.f;
+	UWorld* World = GetWorld();
+	if (!World) return 1.f;
+	UGameInstance* GI = World->GetGameInstance();
+	if (!GI) return 1.f;
+	URTSDayNightSubsystem* DayNight = GI->GetSubsystem<URTSDayNightSubsystem>();
+	if (!DayNight) return 1.f;
+	return DayNight->IsNight() ? VampireNightDamageMultiplier : VampireDayDamageMultiplier;
+}
+
+float ARTSUnitCharacter::GetDayNightMoveSpeedMultiplier() const
+{
+	if (FactionId != EFactionId::Vampires) return 1.f;
+	UWorld* World = GetWorld();
+	if (!World) return 1.f;
+	UGameInstance* GI = World->GetGameInstance();
+	if (!GI) return 1.f;
+	URTSDayNightSubsystem* DayNight = GI->GetSubsystem<URTSDayNightSubsystem>();
+	if (!DayNight) return 1.f;
+	return DayNight->IsNight() ? VampireNightMoveMultiplier : VampireDayMoveMultiplier;
+}
+
 void ARTSUnitCharacter::UpdateMoraleEffects()
 {
 	if (!MoraleComponent || !GetCharacterMovement())
@@ -260,8 +317,9 @@ void ARTSUnitCharacter::UpdateMoraleEffects()
 		return;
 	}
 	const float BaseSpeed = CachedUnitData.MoveSpeed > 0.f ? CachedUnitData.MoveSpeed : 420.f;
-	const float Mult = MoraleComponent->CurrentMorale < MoraleThresholdLow ? MoraleSpeedMultiplierLow : 1.f;
-	GetCharacterMovement()->MaxWalkSpeed = BaseSpeed * Mult;
+	const float MoraleMult = MoraleComponent->CurrentMorale < MoraleThresholdLow ? MoraleSpeedMultiplierLow : 1.f;
+	const float DayNightMult = GetDayNightMoveSpeedMultiplier();
+	GetCharacterMovement()->MaxWalkSpeed = BaseSpeed * MoraleMult * DayNightMult;
 }
 
 void ARTSUnitCharacter::UpdateDetachedAndDrain()
