@@ -18,11 +18,25 @@ bool ARTSHeroCharacter::TryStartSecureRegion()
 
 void ARTSHeroCharacter::BeginPlay()
 {
+	// BUG-08 fix: suppress base-class registry init so hero data is loaded exactly once.
+	// ARTSUnitCharacter::BeginPlay checks bInitializeFromRegistry; if we leave it true AND
+	// HeroId is set, both the unit-level and hero-level init would run (double morale + stat reset).
+	// Heroes always initialize via the hero path (InitializeFromRegistry below), so we disable
+	// the unit path temporarily before calling Super.
+	const bool bWasUnitRegistryInit = bInitializeFromRegistry;
+	bInitializeFromRegistry = false;
+
 	Super::BeginPlay();
-	// If HeroId is set (e.g. in Details when placed in level), load data from registry for testing.
+
+	bInitializeFromRegistry = bWasUnitRegistryInit;
+
+	// Hero-specific init: loads HeroRow + UnitRow and calls InitializeFromHeroRow (single path).
 	if (HeroId != NAME_None)
 	{
-		InitializeFromRegistry();
+		if (!InitializeFromRegistry())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[RTS|Hero] BeginPlay: InitializeFromRegistry failed for HeroId=%s. Check DataRegistry."), *HeroId.ToString());
+		}
 	}
 }
 
@@ -47,7 +61,9 @@ bool ARTSHeroCharacter::InitializeFromRegistry()
 	{
 		return false;
 	}
-	URTSDataRegistry* Registry = World->GetGameInstance()->GetSubsystem<URTSDataRegistry>();
+	UGameInstance* GI = World->GetGameInstance();
+	if (!GI) return false;
+	URTSDataRegistry* Registry = GI->GetSubsystem<URTSDataRegistry>();
 	if (!Registry)
 	{
 		return false;

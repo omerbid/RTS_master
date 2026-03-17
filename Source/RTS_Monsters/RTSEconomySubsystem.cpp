@@ -26,6 +26,24 @@ void URTSEconomySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		World->GetTimerManager().SetTimer(EconomyTickHandle, this, &URTSEconomySubsystem::TickEconomy,
 			EconomyTickIntervalSeconds, true);
+		UE_LOG(LogTemp, Log, TEXT("[RTS|Economy] Timer registered in Initialize."));
+	}
+	else
+	{
+		// Standalone packaged: World not available yet. Bind a world delegate to register timer when World loads.
+		UE_LOG(LogTemp, Warning, TEXT("[RTS|Economy] World null during Initialize – deferring timer to OnPostWorldInitialization."));
+		FWorldDelegates::OnPostWorldInitialization.AddWeakLambda(this,
+			[this](UWorld* InWorld, const UWorld::InitializationValues)
+			{
+				if (!InWorld || !GetGameInstance() || InWorld != GetGameInstance()->GetWorld()) return;
+				if (!EconomyTickHandle.IsValid())
+				{
+					InWorld->GetTimerManager().SetTimer(EconomyTickHandle, this,
+						&URTSEconomySubsystem::TickEconomy, EconomyTickIntervalSeconds, true);
+					UE_LOG(LogTemp, Log, TEXT("[RTS|Economy] Timer registered via world delegate (deferred path)."));
+				}
+				FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+			});
 	}
 }
 
@@ -256,6 +274,7 @@ void URTSEconomySubsystem::TickEconomy()
 	{
 		return;
 	}
+
 
 	UGameInstance* GI = World->GetGameInstance();
 	if (!GI)

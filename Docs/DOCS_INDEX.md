@@ -72,7 +72,11 @@
 | **מדיניות Migration** | `Docs/save_migration_policy.md` | גרסאות schema ומפת מיגרציה (v1–v5). |
 | **Spec מצב "פרויקט קיים"** | `Docs/existing_project_mode_spec.md` | זרימות UI, naming, slots, חוזה מוצרי MVP ומקרי קצה. |
 
-תוכנית QA (מטריצת Save/Load, Harness) – מומלץ ליישם לפי המסמך "ניתוח פערים ותכנון מפורט ל־Save_Load, QA וביצועים".
+| **תוכנית QA Save/Load** | `Docs/QA_PLAN_SAVE_LOAD.md` | עקרונות אוטומציה, מטריצת תרחישים, Golden Saves, Test Groups. |
+| **חוזה Combat** | `Docs/COMBAT_CONTRACT.md` | Single Damage Authority, מחזור חיים Engagement, אינטגרציה Orders/Morale, Save/Load. |
+| **מקשי קלט (מקור אמת)** | `Docs/KEYBINDS_SINGLE_SOURCE.md` | Secure=G, Ritual=B; Doc of Record מול P2/סטטוס. |
+
+תוכנית QA מפורטת (מטריצה C) – גם בדוח "ניתוח פערים ותכנון מפורט ל־Save_Load, QA וביצועים" ובדוח "דוח פערים... Combat מרכזית".
 
 ---
 

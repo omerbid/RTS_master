@@ -42,6 +42,17 @@ public:
 	/** For Load: assign restored GUID so references (AttackTarget, Captain) can resolve. */
 	void SetPersistentUnitGuid(FGuid Id) { PersistentUnitGuid = Id; }
 
+	/**
+	 * Single Damage Authority enforcement.
+	 * All combat damage MUST flow through URTSCombatManagerSubsystem -> ApplyDamageToGroup.
+	 * Override TakeDamage to block accidental direct damage (logs error, returns 0).
+	 */
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
+		AController* EventInstigator, AActor* DamageCauser) override;
+
+	/** PostLoadFixup: if unit is detached, sanitize Attack order -> None (COMBAT_CONTRACT). */
+	void SanitizeOrdersForDetached();
+
 	/** Cached unit data row (filled from Registry by UnitId; editable here to override per instance). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Data")
 	FUnitRow CachedUnitData;

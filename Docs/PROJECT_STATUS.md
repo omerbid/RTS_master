@@ -31,7 +31,7 @@
 | `RTSDataTypes.h` | Enums: EFactionId, ERegionType, EUnitRole, ESpecialTag, ERTSPostCombatBehavior, ERTSOrderType, EHumanNPCState, ERTSGameResult, ERTSRespawnState. Structs: FRTSOrderPayload, FUnitRow, FHeroRow, FHeroXPRow, FMoraleThresholdRow. |
 | `RTSDataRegistry.h/.cpp` | GameInstanceSubsystem. טוען DT_Units_MVP, DT_Heroes_MVP, DT_HeroXP_Prototype, DT_MoraleThresholds. GetUnitRow(UnitId), GetHeroRow(HeroId), GetUnitRowForHero, GetFirstRecruitableUnitIdForFaction. |
 
-**FUnitRow (יחידות):** Faction, UnitId, DisplayName, Role, PowerScale, HP, Damage, Range, AttackSpeed, Armor, MoveSpeed, MoraleBase, Upkeep, RecruitCostMoney, ConvertPopulationCost, RecruitCostResource, Special, PostCombatBehavior, Rank, Level.
+**FUnitRow (יחידות):** Faction, UnitId, DisplayName, Role, PowerScale, HP, Damage, Range, AttackSpeed, Armor, MoveSpeed, MoraleBase, Upkeep, RecruitCostMoney, ConvertPopulationCost, RecruitCostResource, Special, PostCombatBehavior, Rank, Level; **Combat target (data-driven):** PreferredTargetRoles, TargetPriorityBias, FocusFireFactor (Docs/COMBAT_CONTRACT).
 
 **כלכלה (מתאים ל־GDD):** בני אדם – גיוס בכסף (RecruitCostMoney) + תחזוקה (Upkeep). מפלצות – גיוס במשאב סיעה (RecruitCostResource) + NPC (ConvertPopulationCost), תחזוקה במשאב.
 
@@ -98,7 +98,15 @@
 |------|--------|
 | `RTSDayNightSubsystem.h/.cpp` | URTSDayNightSubsystem – Day/Night (אם הוטמע; תוכנית P6). |
 
-### 2.10 בדיקות
+### 2.10 Save/Load (״פרויקט קיים״ – שלד)
+
+| קובץ | תפקיד |
+|------|--------|
+| `RTSSaveSubsystem.h/.cpp` | URTSSaveSubsystem – שער יחיד: AcquireSaveLock/ReleaseSaveLock, RequestManualSave, RequestLoad, ListProjects, CreateProject, DeleteProject. שלד (ללא I/O עד Vertical Slice). |
+| `RTSProjectIndexSaveGame.h/.cpp` | URTSProjectIndexSaveGame – רשימת פרויקטים (FProjectMeta). |
+| `RTSProjectSaveGame.h/.cpp` | URTSProjectSaveGame – Meta (SaveSchemaVersion, ProjectId, MapName, timestamps). להרחבה עם Regions/Units/Economy/Victory. |
+
+### 2.11 בדיקות
 
 | קובץ | תפקיד |
 |------|--------|

@@ -19,6 +19,7 @@ class RTS_MONSTERS_API URTSOrderComponent : public UActorComponent
 public:
 	URTSOrderComponent();
 
+	/** Current order type. Public for SanitizeOrdersForDetached (PostLoadFixup) and Save/Load. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RTS|Order")
 	ERTSOrderType CurrentOrderType = ERTSOrderType::None;
 
@@ -40,10 +41,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RTS|Order")
 	bool HasOrder() const { return CurrentOrderType != ERTSOrderType::None; }
 
-	/** Execute current order for one frame. Called from Character Tick as fallback when component tick may not run (spawned units). */
+	/** Execute current order for one frame. Called by URTSOrderManagerSubsystem every tick. */
 	void ExecuteOrder(float DeltaTime);
-
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
 	virtual void BeginPlay() override;

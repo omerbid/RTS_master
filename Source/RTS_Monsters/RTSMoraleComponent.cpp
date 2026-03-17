@@ -20,8 +20,23 @@ void URTSMoraleComponent::BeginPlay()
 
 float URTSMoraleComponent::ApplyMoraleDelta(float Delta)
 {
+	const float OldMorale = CurrentMorale;
 	const float NewValue = FMath::Clamp(CurrentMorale + Delta, MinMorale, MaxMorale);
 	CurrentMorale = NewValue;
+
+	// Log threshold crossings for diagnostics (30 = Low, 15 = Critical).
+	const bool bCrossedLow = OldMorale >= 30.f && CurrentMorale < 30.f;
+	const bool bCrossedCritical = OldMorale >= 15.f && CurrentMorale < 15.f;
+	if (bCrossedCritical)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RTS|Morale] %s crossed CRITICAL threshold (%.1f -> %.1f)."),
+			GetOwner() ? *GetOwner()->GetName() : TEXT("?"), OldMorale, CurrentMorale);
+	}
+	else if (bCrossedLow)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[RTS|Morale] %s crossed LOW threshold (%.1f -> %.1f)."),
+			GetOwner() ? *GetOwner()->GetName() : TEXT("?"), OldMorale, CurrentMorale);
+	}
 	return CurrentMorale;
 }
 

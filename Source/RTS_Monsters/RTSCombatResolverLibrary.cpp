@@ -100,7 +100,13 @@ FCombatGroup URTSCombatResolverLibrary::BuildGroupFromUnits(const TArray<ARTSUni
 		Group.Members.Add(Handle);
 	}
 
-	Group.bIsRanged = (Group.Members.Num() > 0 && Group.Members[0].Snapshot.Role == ECombatRole::Ranged);
+	// Majority-vote for bIsRanged: group is ranged if more than half its members are Ranged role.
+	int32 RangedCount = 0;
+	for (const FCombatUnitHandle& H : Group.Members)
+	{
+		if (H.Snapshot.Role == ECombatRole::Ranged) ++RangedCount;
+	}
+	Group.bIsRanged = (Group.Members.Num() > 0 && RangedCount * 2 > Group.Members.Num());
 	RefreshGroupState(Group);
 	return Group;
 }
@@ -259,25 +265,41 @@ int32 URTSCombatResolverLibrary::ApplyDamageToGroup(FCombatGroup& Group, float T
 {
 	if (TotalDamage <= 0.f || Group.LivingCount <= 0) return 0;
 
-	// Distribute damage evenly across living units for gradual HP decrease
-	const float DamagePerUnit = TotalDamage / static_cast<float>(Group.LivingCount);
-	int32 Kills = 0;
-
+	// Frontline-first damage allocation: concentrate damage on lowest-HP units first
+	// to eliminate them cleanly rather than spreading thin (prevents overkill waste).
+	// Sort living handles by ascending CurrentHP so weakest absorb first.
+	TArray<FCombatUnitHandle*> LivingHandles;
+	LivingHandles.Reserve(Group.LivingCount);
 	for (FCombatUnitHandle& Handle : Group.Members)
 	{
-		if (!Handle.bAlive) continue;
+		if (Handle.bAlive) LivingHandles.Add(&Handle);
+	}
+	LivingHandles.Sort([](const FCombatUnitHandle* A, const FCombatUnitHandle* B)
+	{
+		return A->Snapshot.CurrentHP < B->Snapshot.CurrentHP;
+	});
 
-		const float NewHP = FMath::Max(0.f, Handle.Snapshot.CurrentHP - DamagePerUnit);
-		Handle.Snapshot.CurrentHP = NewHP;
+	float RemainingDamage = TotalDamage;
+	int32 Kills = 0;
 
-		ARTSUnitCharacter* Unit = Handle.Unit.Get();
+	for (FCombatUnitHandle* Handle : LivingHandles)
+	{
+		if (RemainingDamage <= 0.f) break;
+
+		const float AbsorbedDamage = FMath::Min(Handle->Snapshot.CurrentHP, RemainingDamage);
+		RemainingDamage -= AbsorbedDamage;
+		const float NewHP = Handle->Snapshot.CurrentHP - AbsorbedDamage;
+		Handle->Snapshot.CurrentHP = NewHP;
+
+		ARTSUnitCharacter* Unit = Handle->Unit.Get();
 		if (Unit && IsValid(Unit))
 		{
 			Unit->OverrideHP = NewHP;  // Sync to unit so UI shows current HP
 			if (NewHP <= 0.f)
 			{
-				Handle.bAlive = false;
+				Handle->bAlive = false;
 				Kills++;
+				UE_LOG(LogTemp, Log, TEXT("[RTS|Combat] Unit %s killed in combat (frontline-first allocation)."), *Unit->GetName());
 				Unit->Destroy();
 			}
 		}

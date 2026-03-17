@@ -30,7 +30,7 @@
 
 ## 3. Atomicity ו־Consistency
 
-- **Consistency snapshot:** כל ה־Subsystems וה־Actors נלכדים באותו "רגע לוגי" (אותו frame boundary). Freeze קצר או Save Lock שמונע mutating בזמן Gather.
+- **Consistency snapshot:** כל ה־Subsystems וה־Actors נלכדים באותו "רגע לוגי" (אותו frame boundary). Freeze קצר או Save Lock שמונע mutating בזמן Gather. **Combat:** בזמן SaveLock לא להריץ Resolve step (או לאסוף Snapshot רק בין Resolve intervals) כדי ש־HP ב־Combat ו־Units תואמים; ראה `Docs/COMBAT_CONTRACT.md`.
 - **No UObject access off‑thread:** Snapshot נאסף על Game Thread ל־pure structs; כתיבה/דחיסה ברקע מותרת רק על הנתונים הסריאליזביליים.
 - **A/B slots:** שמירה לסירוגין ל־`ProjectId_A` ו־`ProjectId_B`; Header עם Timestamp + Version + CRC/Checksum. ב־Load בוחרים את העדכני התקין.
 - **Invariant validation לפני commit:** אם snapshot שובר invariant (למשל Unit עם AttackTargetGuid לא קיים), policy מוגדרת: fail save / auto‑repair / sanitize (למשל OrderType=None).

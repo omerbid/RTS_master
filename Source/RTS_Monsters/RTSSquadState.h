@@ -52,6 +52,9 @@ public:
 	/** Set Captain (called when a member is promoted). Clears if Unit is null. */
 	void SetCaptain(ARTSUnitCharacter* Unit);
 
+	/** Get current captain (nullptr if none or destroyed). Used by UpdateDetachedAndDrain O(1) lookup. */
+	ARTSUnitCharacter* GetCaptain() const { return CaptainUnit.Get(); }
+
 private:
 	/** Members stored as weak ptrs so we don't keep destroyed units. Not exposed to Blueprint. */
 	TArray<TWeakObjectPtr<ARTSUnitCharacter>> Members;

@@ -45,7 +45,8 @@ public:
 	/** Called when any faction reaches control level 5 in a region. */
 	void NotifyControlReachedFive(ARTSRegionVolume* Region, EFactionId Faction);
 
-	/** Called when a Hero dies; either lose (no region >= 3) or start respawn timer (P5). */
+	/** Called when a Hero dies; either lose (no region >= 3) or start respawn timer (P5).
+	 *  DyingHero is excluded from the "living heroes" search (called from Destroyed() while still valid). */
 	void NotifyHeroDeath(ARTSHeroCharacter* Hero);
 
 	UFUNCTION(BlueprintCallable, Category = "RTS|Victory")
@@ -111,7 +112,7 @@ public:
 	FOnRTSRespawnRitualAvailable OnRespawnRitualAvailable;
 
 private:
-	void CheckLoseCondition(UWorld* World, EFactionId Faction);
+	void CheckLoseCondition(UWorld* World, EFactionId Faction, ARTSHeroCharacter* ExcludeDyingHero = nullptr);
 	/** P5: Check if faction has at least one region with control >= 3. */
 	bool HasRegionWithControlAtLeast3(UWorld* World, EFactionId Faction) const;
 	/** P5: Apply morale shock to squads with any member in range of Location. */
@@ -128,7 +129,6 @@ private:
 	void OnRitualChannelComplete_Werewolves() { OnRitualChannelComplete(EFactionId::Werewolves); }
 	/** P5: Find region with highest control for Faction (>= 3), spawn Hero there. */
 	ARTSHeroCharacter* SpawnHeroInBestRegion(UWorld* World, EFactionId Faction, FName HeroId);
-	static uint8 FactionToIndex(EFactionId Faction);
 
 	UPROPERTY()
 	ERTSGameResult GameResult = ERTSGameResult::Playing;
@@ -139,9 +139,9 @@ private:
 	UPROPERTY()
 	EFactionId LosingFaction = EFactionId::Humans;
 
-	// P5: Respawn state per faction (index by uint8(EFactionId))
-	ERTSRespawnState RespawnStateByFaction[3] = { ERTSRespawnState::None, ERTSRespawnState::None, ERTSRespawnState::None };
-	FName RespawnHeroIdByFaction[3] = { NAME_None, NAME_None, NAME_None };
-	FTimerHandle RespawnTimerHandleByFaction[3];
-	FTimerHandle RitualChannelHandleByFaction[3];
+	// P5: Respawn state per faction – TMap is safe if EFactionId gains new values in future.
+	TMap<EFactionId, ERTSRespawnState> RespawnStateByFaction;
+	TMap<EFactionId, FName>           RespawnHeroIdByFaction;
+	TMap<EFactionId, FTimerHandle>    RespawnTimerHandleByFaction;
+	TMap<EFactionId, FTimerHandle>    RitualChannelHandleByFaction;
 };

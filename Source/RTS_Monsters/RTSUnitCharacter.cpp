@@ -154,11 +154,12 @@ void ARTSUnitCharacter::Destroyed()
 {
 	if (URTSSquadState* Squad = SquadReference.Get())
 	{
+		// Remove this unit first so morale penalties don't include the dying unit's own morale.
+		Squad->RemoveMember(this);
 		if (bIsCaptain)
 		{
 			Squad->ApplyMoraleDeltaToAll(CaptainDeathMoralePenalty);
 		}
-		Squad->RemoveMember(this);
 		Squad->ApplyMoraleDeltaToAll(CasualtyMoralePenalty);
 	}
 	Super::Destroyed();
@@ -335,31 +336,38 @@ void ARTSUnitCharacter::UpdateDetachedAndDrain()
 	}
 	const FVector MyLoc = GetActorLocation();
 	bool bAuthorityInRange = false;
-	for (TActorIterator<ARTSUnitCharacter> It(World); It; ++It)
+
+	// O(H) scan: only iterate Heroes (TActorIterator<ARTSHeroCharacter>), not all N units.
+	// Heroes are typically 1-3 per session; this reduces cost from O(N²) to O(N*H) ≈ O(N).
+	for (TActorIterator<ARTSHeroCharacter> HeroIt(World); HeroIt; ++HeroIt)
 	{
-		ARTSUnitCharacter* Other = *It;
-		if (!Other || Other->FactionId != FactionId)
+		ARTSHeroCharacter* Hero = *HeroIt;
+		if (!Hero || !IsValid(Hero) || Hero->FactionId != FactionId) continue;
+		if (FVector::Dist(MyLoc, Hero->GetActorLocation()) <= HeroCommandRadius)
 		{
-			continue;
+			bAuthorityInRange = true;
+			break;
 		}
-		const float Dist = FVector::Dist(MyLoc, Other->GetActorLocation());
-		if (ARTSHeroCharacter* Hero = Cast<ARTSHeroCharacter>(Other))
+	}
+
+	// If no Hero in range, check Captains via SquadState (O(1) lookup per squad).
+	if (!bAuthorityInRange)
+	{
+		if (URTSSquadState* Squad = SquadReference.Get())
 		{
-			if (Dist <= HeroCommandRadius)
+			if (ARTSUnitCharacter* Captain = Squad->GetCaptain())
 			{
-				bAuthorityInRange = true;
-				break;
-			}
-		}
-		else if (Other->bIsCaptain && Other->CommandAuthorityComponent)
-		{
-			if (Dist <= CaptainCommandRadius)
-			{
-				bAuthorityInRange = true;
-				break;
+				if (Captain != this && IsValid(Captain) && Captain->bIsCaptain)
+				{
+					if (FVector::Dist(MyLoc, Captain->GetActorLocation()) <= CaptainCommandRadius)
+					{
+						bAuthorityInRange = true;
+					}
+				}
 			}
 		}
 	}
+
 	bIsDetached = !bAuthorityInRange;
 	if (bIsDetached && MoraleComponent)
 	{
@@ -383,5 +391,26 @@ void ARTSUnitCharacter::TickLowMoraleAutoRetreat()
 	FRTSOrderPayload Payload;
 	Payload.MoveDestination = GetActorLocation() - 400.f * GetActorForwardVector();
 	SetCurrentOrder(ERTSOrderType::Move, Payload);
+}
+
+float ARTSUnitCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
+	AController* EventInstigator, AActor* DamageCauser)
+{
+	// Single Damage Authority: all combat damage must go through URTSCombatManagerSubsystem.
+	// Direct TakeDamage calls are blocked to prevent double-damage paths.
+	// If you need environmental damage (traps, hazards) use a separate non-combat system.
+	UE_LOG(LogTemp, Warning, TEXT("[RTS] BLOCKED TakeDamage on %s (%.1f dmg). Use CombatManager only."),
+		*GetName(), DamageAmount);
+	return 0.f;
+}
+
+void ARTSUnitCharacter::SanitizeOrdersForDetached()
+{
+	// PostLoadFixup: detached units must not have Attack orders (COMBAT_CONTRACT + Detached rule).
+	if (bIsDetached && OrderComponent && OrderComponent->CurrentOrderType == ERTSOrderType::Attack)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[RTS] PostLoadFixup: %s is detached, sanitizing Attack -> None."), *GetName());
+		OrderComponent->ClearOrder(false);
+	}
 }
 

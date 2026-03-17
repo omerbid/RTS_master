@@ -171,6 +171,18 @@ struct FUnitRow : public FTableRowBase
 	/** Unit level for morale contribution band (Level 1: 0.75–1.0, Level 2: 0.85–1.15, etc.). Default 1. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Level = 1;
+
+	/** Combat target selection: preferred target roles (e.g. RangedLight, Assassin). Empty = no preference. COMBAT_CONTRACT. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (DisplayName = "Preferred Target Roles"))
+	TArray<FName> PreferredTargetRoles;
+
+	/** Bias for target priority (e.g. focus high-value). 0 = neutral. Future scoring. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "-1", ClampMax = "1"))
+	float TargetPriorityBias = 0.f;
+
+	/** Focus-fire factor (0–1): reduce overkill when multiple units same target. 0 = no focus. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "1"))
+	float FocusFireFactor = 0.f;
 };
 
 USTRUCT(BlueprintType)

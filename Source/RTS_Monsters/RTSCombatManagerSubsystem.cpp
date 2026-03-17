@@ -3,6 +3,7 @@
 #include "RTSCombatResolverLibrary.h"
 #include "RTSUnitCharacter.h"
 #include "RTSHeroCharacter.h"
+#include "RTSSaveSubsystem.h"
 #include "Engine/World.h"
 #include "Stats/Stats.h"
 
@@ -15,13 +16,23 @@ void URTSCombatManagerSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	for (FCombatInstance& Combat : ActiveCombats)
+	// Snapshot count before the loop: StartCombat calls (from delegates) may append new entries;
+	// those entries are intentionally skipped this frame to avoid iterator invalidation.
+	const int32 NumThisFrame = ActiveCombats.Num();
+	for (int32 i = 0; i < NumThisFrame; ++i)
 	{
-		if (Combat.bFinished) continue;
-		UpdateCombat(Combat, DeltaTime);
+		if (!ActiveCombats.IsValidIndex(i)) break;
+		if (ActiveCombats[i].bFinished) continue;
+		UpdateCombat(ActiveCombats[i], DeltaTime);
 	}
 
 	ActiveCombats.RemoveAll([](const FCombatInstance& Combat) { return Combat.bFinished; });
+
+	// Sweep stale TWeakObjectPtr keys (units destroyed outside EndCombat – edge cases).
+	for (auto It = UnitToCombatId.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid()) It.RemoveCurrent();
+	}
 }
 
 int32 URTSCombatManagerSubsystem::StartCombat(const TArray<ARTSUnitCharacter*>& SideAUnits,
@@ -79,6 +90,9 @@ int32 URTSCombatManagerSubsystem::StartCombat(const TArray<ARTSUnitCharacter*>& 
 	RegisterUnitsToCombat(ValidA, Combat.CombatId);
 	RegisterUnitsToCombat(ValidB, Combat.CombatId);
 
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Combat] StartCombat id=%d SideA=%d units SideB=%d units @ %s"),
+		Combat.CombatId, ValidA.Num(), ValidB.Num(), *CombatCenter.ToString());
+
 	ActiveCombats.Add(Combat);
 	OnCombatStarted.Broadcast(Combat.CombatId);
 	return Combat.CombatId;
@@ -87,7 +101,9 @@ int32 URTSCombatManagerSubsystem::StartCombat(const TArray<ARTSUnitCharacter*>& 
 bool URTSCombatManagerSubsystem::IsUnitInCombat(const ARTSUnitCharacter* Unit) const
 {
 	if (!Unit) return false;
-	return UnitToCombatId.Contains(TWeakObjectPtr<const ARTSUnitCharacter>(const_cast<ARTSUnitCharacter*>(Unit)));
+	// Use non-const pointer for map lookup (key type is TWeakObjectPtr<ARTSUnitCharacter>).
+	ARTSUnitCharacter* MutableUnit = const_cast<ARTSUnitCharacter*>(Unit);
+	return UnitToCombatId.Contains(TWeakObjectPtr<ARTSUnitCharacter>(MutableUnit));
 }
 
 void URTSCombatManagerSubsystem::ForceEndCombat(int32 CombatId)
@@ -104,6 +120,21 @@ void URTSCombatManagerSubsystem::ForceEndCombat(int32 CombatId)
 
 void URTSCombatManagerSubsystem::UpdateCombat(FCombatInstance& Combat, float DeltaTime)
 {
+	// SaveLock contract: do not resolve combat during Save snapshot boundary (COMBAT_CONTRACT).
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (URTSSaveSubsystem* SaveSub = GI->GetSubsystem<URTSSaveSubsystem>())
+			{
+				if (SaveSub->IsSaveLocked())
+				{
+					return;
+				}
+			}
+		}
+	}
+
 	Combat.TimeAccumulator += DeltaTime;
 	Combat.ElapsedTime += DeltaTime;
 
@@ -116,6 +147,10 @@ void URTSCombatManagerSubsystem::UpdateCombat(FCombatInstance& Combat, float Del
 
 	const int32 Seed = HashCombine(GetTypeHash(Combat.CombatId), GetTypeHash(FMath::FloorToInt(Combat.ElapsedTime * 100.f)));
 	const FCombatRoundResult RoundResult = URTSCombatResolverLibrary::ResolveCombatRound(Combat, Seed);
+
+	UE_LOG(LogTemp, Verbose, TEXT("[RTS|Combat] CombatId=%d Round: killsToA=%d killsToB=%d SideARouted=%d SideBRouted=%d"),
+		Combat.CombatId, RoundResult.EstimatedKillsToSideA, RoundResult.EstimatedKillsToSideB,
+		(int32)RoundResult.bSideARouted, (int32)RoundResult.bSideBRouted);
 
 	OnCombatRoundResolved.Broadcast(Combat.CombatId);
 
@@ -146,6 +181,29 @@ void URTSCombatManagerSubsystem::EndCombat(FCombatInstance& Combat)
 {
 	if (Combat.bFinished) return;
 
+	// Engagement lifecycle: notify involved units so PostCombatBehavior fires (Hold/Advance/Retreat).
+	auto ApplyPostCombat = [](const FCombatGroup& Group)
+	{
+		for (const FCombatUnitHandle& Handle : Group.Members)
+		{
+			if (ARTSUnitCharacter* Unit = Handle.Unit.Get())
+			{
+				if (IsValid(Unit) && Unit->OrderComponent)
+				{
+					Unit->OrderComponent->ClearOrder(true);  // true = apply PostCombatBehavior
+				}
+			}
+		}
+	};
+
+	for (const FCombatGroup& G : Combat.SideA.Groups) ApplyPostCombat(G);
+	for (const FCombatGroup& G : Combat.SideB.Groups) ApplyPostCombat(G);
+
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Combat] CombatId=%d ended. SideA=%d living, SideB=%d living."),
+		Combat.CombatId,
+		[&]{ int32 N=0; for(auto& G:Combat.SideA.Groups) N+=G.LivingCount; return N; }(),
+		[&]{ int32 N=0; for(auto& G:Combat.SideB.Groups) N+=G.LivingCount; return N; }());
+
 	UnregisterUnitsFromCombat(Combat);
 	Combat.bFinished = true;
 	Combat.SideA.State = ECombatState::Finished;
@@ -164,14 +222,13 @@ void URTSCombatManagerSubsystem::RegisterUnitsToCombat(const TArray<ARTSUnitChar
 
 void URTSCombatManagerSubsystem::UnregisterUnitsFromCombat(FCombatInstance& Combat)
 {
+	// Use the TWeakObjectPtr key directly – works even for already-destroyed units
+	// (dead units return nullptr from .Get() but their raw pointer key is still in the map).
 	auto ClearGroup = [this](const FCombatGroup& Group)
 	{
 		for (const FCombatUnitHandle& Handle : Group.Members)
 		{
-			if (ARTSUnitCharacter* U = Handle.Unit.Get())
-			{
-				UnitToCombatId.Remove(U);
-			}
+			UnitToCombatId.Remove(Handle.Unit);
 		}
 	};
 

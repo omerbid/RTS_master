@@ -51,7 +51,8 @@ HeroDestroyed (Hero->Destroyed() → NotifyHeroDeath(Hero))
 **החלטות עיצוביות (מנוסחות):**
 
 - ב־RespawnPending/RitualAvailable/ChannelingRitual **אין** גיבור חי – לכן פקודות שדורשות "גיבור נבחר" (למשל Secure Region, Recruit) לא זמינות עד שה־Hero spawn מחדש. זה מכוון (GDD: Hero-centric).
-- אם SpawnHeroInBestRegion נכשל (אין Region עם control ≥ 3 – לא אמור לקרות כי נכנסנו ל־Respawn רק כשיש Region ≥ 3): במימוש נוכחי יש בדיקה; אם אין BestRegion לא spawn ולא קורסים. **המלצה:** להוסיף fallback (למשל הודעה + החזרה ל־RitualAvailable) אם יידרש.
+- אם SpawnHeroInBestRegion נכשל (אין Region עם control ≥ 3): במימוש נוכחי יש **fallback** – המצב חוזר ל־RitualAvailable, השחקן יכול לנסות שוב; מוצגת הודעה.
+- **Channel Contract (MVP):** ערוץ ה־Ritual (10s) **לא ניתן לביטול** במהלך ה־channel ב־MVP; "no cancel during channel". אם יוחלט בעתיד על ביטול (למשל הפרעה), יוגדר במפורש ויתווסף ל־QA matrix.
 
 ---
 

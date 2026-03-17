@@ -56,6 +56,15 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
 	static ARTSRegionVolume* GetRegionAtLocation(const UObject* WorldContextObject, FVector WorldLocation);
 
+	/** Hero spawn offset relative to region origin (world-space). Set in editor to a clear, open area within the region.
+	 *  If zero, hero spawns at region actor origin (may be inside terrain). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Region")
+	FVector HeroSpawnOffset = FVector::ZeroVector;
+
+	/** Returns the safe spawn location for a hero (origin + HeroSpawnOffset). */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
+	FVector GetHeroSpawnLocation() const { return GetActorLocation() + HeroSpawnOffset; }
+
 	/** Stable identity for save/load and serialization (GAP_ANALYSIS). Set in editor or level; used to map saved state to Region actor. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Region")
 	FName GetRegionId() const { return RegionId; }

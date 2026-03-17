@@ -13,6 +13,7 @@
 void URTSVictorySubsystem::NotifyControlReachedFive(ARTSRegionVolume* Region, EFactionId Faction)
 {
 	if (GameResult != ERTSGameResult::Playing) return;
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Victory] Game WON by Faction=%d via region control."), (int32)Faction);
 	GameResult = ERTSGameResult::Won;
 	WinningFaction = Faction;
 	OnGameWon.Broadcast(Faction);
@@ -27,6 +28,9 @@ void URTSVictorySubsystem::NotifyHeroDeath(ARTSHeroCharacter* Hero)
 	const EFactionId Faction = Hero->FactionId;
 	const FName HeroIdToRespawn = Hero->HeroId;
 
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Victory] HeroDeath: %s (Faction=%d). Checking respawn eligibility."),
+		*HeroIdToRespawn.ToString(), (int32)Faction);
+
 	// P5 GDD: If faction has at least one region with control >= 3, start respawn flow instead of lose.
 	if (HasRegionWithControlAtLeast3(World, Faction))
 	{
@@ -35,20 +39,20 @@ void URTSVictorySubsystem::NotifyHeroDeath(ARTSHeroCharacter* Hero)
 		return;
 	}
 
-	CheckLoseCondition(World, Faction);
+	CheckLoseCondition(World, Faction, Hero);
 }
 
-void URTSVictorySubsystem::CheckLoseCondition(UWorld* World, EFactionId Faction)
+void URTSVictorySubsystem::CheckLoseCondition(UWorld* World, EFactionId Faction, ARTSHeroCharacter* ExcludeDyingHero)
 {
 	if (GameResult != ERTSGameResult::Playing) return;
 
-	// Any living Hero of this faction?
+	// Any living Hero of this faction (excluding the hero currently firing Destroyed(), still in world)?
 	bool bHasLivingHero = false;
 	TArray<AActor*> Found;
 	UGameplayStatics::GetAllActorsOfClass(World, ARTSHeroCharacter::StaticClass(), Found);
 	for (AActor* A : Found)
 	{
-		if (!IsValid(A)) continue;
+		if (!IsValid(A) || A == ExcludeDyingHero) continue;
 		ARTSHeroCharacter* H = Cast<ARTSHeroCharacter>(A);
 		if (H && H->FactionId == Faction)
 		{
@@ -72,15 +76,10 @@ void URTSVictorySubsystem::CheckLoseCondition(UWorld* World, EFactionId Faction)
 	if (bHasRegionWithControl3) return;
 
 	// GDD: no living hero and no region >= 3 -> lose
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Victory] Game LOST by Faction=%d (no living hero, no region>=3)."), (int32)Faction);
 	GameResult = ERTSGameResult::Lost;
 	LosingFaction = Faction;
 	OnGameLost.Broadcast(Faction);
-}
-
-uint8 URTSVictorySubsystem::FactionToIndex(EFactionId Faction)
-{
-	const uint8 I = static_cast<uint8>(Faction);
-	return I < 3u ? I : 0u;
 }
 
 bool URTSVictorySubsystem::HasRegionWithControlAtLeast3(UWorld* World, EFactionId Faction) const
@@ -130,32 +129,30 @@ void URTSVictorySubsystem::StartRespawnTimer(EFactionId Faction, FName HeroIdToR
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	const uint8 Idx = FactionToIndex(Faction);
-	RespawnStateByFaction[Idx] = ERTSRespawnState::WaitingForTimer;
-	RespawnHeroIdByFaction[Idx] = HeroIdToRespawn;
+	RespawnStateByFaction.Add(Faction, ERTSRespawnState::WaitingForTimer);
+	RespawnHeroIdByFaction.Add(Faction, HeroIdToRespawn);
 
 	FTimerManager& TM = World->GetTimerManager();
-	TM.ClearTimer(RespawnTimerHandleByFaction[Idx]);
+	TM.ClearTimer(RespawnTimerHandleByFaction.FindOrAdd(Faction));
 
 	if (Faction == EFactionId::Humans)
-		TM.SetTimer(RespawnTimerHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Humans, RespawnTimerSeconds, false);
+		TM.SetTimer(RespawnTimerHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Humans, RespawnTimerSeconds, false);
 	else if (Faction == EFactionId::Vampires)
-		TM.SetTimer(RespawnTimerHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Vampires, RespawnTimerSeconds, false);
+		TM.SetTimer(RespawnTimerHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Vampires, RespawnTimerSeconds, false);
 	else
-		TM.SetTimer(RespawnTimerHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Werewolves, RespawnTimerSeconds, false);
+		TM.SetTimer(RespawnTimerHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRespawnTimerExpired_Werewolves, RespawnTimerSeconds, false);
 }
 
 void URTSVictorySubsystem::OnRespawnTimerExpired(EFactionId Faction)
 {
-	const uint8 Idx = FactionToIndex(Faction);
-	RespawnStateByFaction[Idx] = ERTSRespawnState::RitualAvailable;
+	RespawnStateByFaction.Add(Faction, ERTSRespawnState::RitualAvailable);
 	OnRespawnRitualAvailable.Broadcast(Faction);
 }
 
 ERTSRespawnState URTSVictorySubsystem::GetRespawnState(EFactionId Faction) const
 {
-	const uint8 Idx = FactionToIndex(Faction);
-	return RespawnStateByFaction[Idx];
+	const ERTSRespawnState* State = RespawnStateByFaction.Find(Faction);
+	return State ? *State : ERTSRespawnState::None;
 }
 
 bool URTSVictorySubsystem::CanPerformRitual(EFactionId Faction) const
@@ -165,11 +162,11 @@ bool URTSVictorySubsystem::CanPerformRitual(EFactionId Faction) const
 
 bool URTSVictorySubsystem::GetFactionWithRitualAvailable(EFactionId& OutFaction) const
 {
-	for (uint8 i = 0; i < 3; ++i)
+	for (const auto& Pair : RespawnStateByFaction)
 	{
-		if (RespawnStateByFaction[i] == ERTSRespawnState::RitualAvailable)
+		if (Pair.Value == ERTSRespawnState::RitualAvailable)
 		{
-			OutFaction = static_cast<EFactionId>(i);
+			OutFaction = Pair.Key;
 			return true;
 		}
 	}
@@ -183,53 +180,53 @@ bool URTSVictorySubsystem::StartRitualChannel(EFactionId Faction)
 	UWorld* World = GetWorld();
 	if (!World) return false;
 
-	const uint8 Idx = FactionToIndex(Faction);
-	RespawnStateByFaction[Idx] = ERTSRespawnState::ChannelingRitual;
+	RespawnStateByFaction.Add(Faction, ERTSRespawnState::ChannelingRitual);
 
 	FTimerManager& TM = World->GetTimerManager();
-	TM.ClearTimer(RitualChannelHandleByFaction[Idx]);
+	TM.ClearTimer(RitualChannelHandleByFaction.FindOrAdd(Faction));
 
 	if (Faction == EFactionId::Humans)
-		TM.SetTimer(RitualChannelHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRitualChannelComplete_Humans, RitualChannelSeconds, false);
+		TM.SetTimer(RitualChannelHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRitualChannelComplete_Humans, RitualChannelSeconds, false);
 	else if (Faction == EFactionId::Vampires)
-		TM.SetTimer(RitualChannelHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRitualChannelComplete_Vampires, RitualChannelSeconds, false);
+		TM.SetTimer(RitualChannelHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRitualChannelComplete_Vampires, RitualChannelSeconds, false);
 	else
-		TM.SetTimer(RitualChannelHandleByFaction[Idx], this, &URTSVictorySubsystem::OnRitualChannelComplete_Werewolves, RitualChannelSeconds, false);
+		TM.SetTimer(RitualChannelHandleByFaction[Faction], this, &URTSVictorySubsystem::OnRitualChannelComplete_Werewolves, RitualChannelSeconds, false);
 
 	return true;
 }
 
 void URTSVictorySubsystem::CancelRitualChannel(EFactionId Faction)
 {
-	const uint8 Idx = FactionToIndex(Faction);
-	if (RespawnStateByFaction[Idx] != ERTSRespawnState::ChannelingRitual) return;
+	if (GetRespawnState(Faction) != ERTSRespawnState::ChannelingRitual) return;
 
 	UWorld* World = GetWorld();
 	if (World)
 	{
-		World->GetTimerManager().ClearTimer(RitualChannelHandleByFaction[Idx]);
+		if (FTimerHandle* Handle = RitualChannelHandleByFaction.Find(Faction))
+		{
+			World->GetTimerManager().ClearTimer(*Handle);
+		}
 	}
-	RespawnStateByFaction[Idx] = ERTSRespawnState::RitualAvailable;
+	RespawnStateByFaction.Add(Faction, ERTSRespawnState::RitualAvailable);
 }
 
 void URTSVictorySubsystem::OnRitualChannelComplete(EFactionId Faction)
 {
-	const uint8 Idx = FactionToIndex(Faction);
-	FName HeroId = RespawnHeroIdByFaction[Idx];
+	FName HeroId = RespawnHeroIdByFaction.FindRef(Faction);
 
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		RespawnStateByFaction[Idx] = ERTSRespawnState::None;
-		RespawnHeroIdByFaction[Idx] = NAME_None;
+		RespawnStateByFaction.Add(Faction, ERTSRespawnState::None);
+		RespawnHeroIdByFaction.Add(Faction, NAME_None);
 		return;
 	}
 
 	ARTSHeroCharacter* NewHero = SpawnHeroInBestRegion(World, Faction, HeroId);
 	if (NewHero)
 	{
-		RespawnStateByFaction[Idx] = ERTSRespawnState::None;
-		RespawnHeroIdByFaction[Idx] = NAME_None;
+		RespawnStateByFaction.Add(Faction, ERTSRespawnState::None);
+		RespawnHeroIdByFaction.Add(Faction, NAME_None);
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Cyan,
@@ -239,7 +236,7 @@ void URTSVictorySubsystem::OnRitualChannelComplete(EFactionId Faction)
 	else
 	{
 		// Fallback: no valid region (e.g. all contested or control lost). Stay RitualAvailable so player can retry.
-		RespawnStateByFaction[Idx] = ERTSRespawnState::RitualAvailable;
+		RespawnStateByFaction.Add(Faction, ERTSRespawnState::RitualAvailable);
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 5.f, FColor::Yellow,
@@ -273,7 +270,8 @@ ARTSHeroCharacter* URTSVictorySubsystem::SpawnHeroInBestRegion(UWorld* World, EF
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	FVector SpawnLoc = BestRegion->GetActorLocation();
+	// Use designer-placed HeroSpawnOffset to avoid spawning inside terrain (BUG-18 fix).
+	FVector SpawnLoc = BestRegion->GetHeroSpawnLocation();
 	FRotator SpawnRot = FRotator::ZeroRotator;
 
 	ARTSHeroCharacter* NewHero = World->SpawnActor<ARTSHeroCharacter>(HeroClass, SpawnLoc, SpawnRot, SpawnParams);

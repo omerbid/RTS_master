@@ -1,0 +1,35 @@
+---
+description: When planning changes to any RTS component, write user stories per component to verify understanding and correctness
+alwaysApply: true
+---
+
+# Plan Mode: User Stories Per Component
+
+When planning changes to **any** C++ class or subsystem in this project, you MUST write at least one user story for each affected component before making changes.
+
+## Format
+
+For each component being modified:
+
+```
+### <ComponentName>
+**User Story:** As a [role], when I [trigger], I expect [observable outcome], so that [game value].
+**Verification:** [how to confirm in-editor / log output / unit test]
+```
+
+## Examples
+
+### URTSCombatManagerSubsystem
+**User Story:** As a developer, when combat starts between 2 units, I expect `[RTS|Combat] StartCombat id=X` in the log and `OnCombatStarted` to fire, so that other systems can react.
+**Verification:** PIE log shows the message; Blueprints bound to `OnCombatStarted` receive the id.
+
+### URTSSaveSubsystem
+**User Story:** As a player, when I call RequestManualSave during an active combat, the save should not fire mid-round (SaveLock), so that HP values are consistent.
+**Verification:** Log shows `SaveLock ACQUIRED/RELEASED` bracketing the snapshot; combat tick shows no resolve while locked.
+
+## Rules
+
+- Every `UFUNCTION` that changes game state needs a user story.
+- Every new `UPROPERTY` that feeds into gameplay logic needs a story describing who reads it and when.
+- Stories must be written in the plan **before** any code changes.
+- Do NOT skip user stories citing "trivial" changes; small bugs often hide in "trivial" code.

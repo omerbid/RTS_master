@@ -68,8 +68,13 @@ void ARTSRegionVolume::SetControlLevelForFaction(EFactionId Faction, int32 Level
 	}
 	RecalcDominantFaction();
 
+	UE_LOG(LogTemp, Log, TEXT("[RTS|Region] %s control set: Faction=%d Level=%d"),
+		*GetName(), (int32)Faction, Clamped);
+
 	if (Clamped >= 5)
 	{
+		UE_LOG(LogTemp, Log, TEXT("[RTS|Region] %s reached control 5 for Faction=%d -> Victory check."),
+			*GetName(), (int32)Faction);
 		if (UWorld* World = GetWorld())
 		{
 			if (UGameInstance* GI = World->GetGameInstance())
@@ -171,21 +176,31 @@ bool ARTSRegionVolume::IsContested() const
 
 void ARTSRegionVolume::EvaluateControlGain()
 {
+	// Purge stale TWeakObjectPtr entries (actors killed inside region without firing EndOverlap).
+	for (auto It = ActorsInRegion.CreateIterator(); It; ++It)
+	{
+		if (!It->IsValid()) It.RemoveCurrent();
+	}
+
 	// GDD: control increases when faction has Hero in region and region not contested. Cap at 4; 5 only via Secure.
 	if (IsContested()) return;
 
 	const int32 MaxGain = FMath::Clamp(ControlGainMaxLevel, 0, 5);
+	// At most one faction gains per tick (prevents simultaneous gain from overlap race window).
+	// Order: Humans first (deterministic; adjust for balance tuning if needed).
 	if (HasHeroOfFaction(EFactionId::Humans) && GetControlLevelForFaction(EFactionId::Humans) < MaxGain)
 	{
 		const int32 NewLevel = GetControlLevelForFaction(EFactionId::Humans) + 1;
 		SetControlLevelForFaction(EFactionId::Humans, NewLevel);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Silver, FString::Printf(TEXT("[Region] Control Humans → %d"), NewLevel));
+		return;
 	}
 	if (HasHeroOfFaction(EFactionId::Vampires) && GetControlLevelForFaction(EFactionId::Vampires) < MaxGain)
 	{
 		const int32 NewLevel = GetControlLevelForFaction(EFactionId::Vampires) + 1;
 		SetControlLevelForFaction(EFactionId::Vampires, NewLevel);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Silver, FString::Printf(TEXT("[Region] Control Vampires → %d"), NewLevel));
+		return;
 	}
 	if (HasHeroOfFaction(EFactionId::Werewolves) && GetControlLevelForFaction(EFactionId::Werewolves) < MaxGain)
 	{

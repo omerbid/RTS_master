@@ -47,12 +47,6 @@ void URTSOrderComponent::ExecuteOrder(float DeltaTime)
 	}
 }
 
-void URTSOrderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	ExecuteOrder(DeltaTime);
-}
-
 void URTSOrderComponent::TickMove(float DeltaTime)
 {
 	ARTSUnitCharacter* Unit = CachedUnit.Get();
@@ -90,8 +84,18 @@ void URTSOrderComponent::TickMove(float DeltaTime)
 void URTSOrderComponent::TickAttack(float DeltaTime)
 {
 	ARTSUnitCharacter* Unit = CachedUnit.Get();
+	if (!Unit) { ClearOrder(true); return; }
+
+	// Detached contract: detached units must not execute Attack orders (defensive only).
+	if (Unit->bIsDetached)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[RTS|Order] %s is detached – sanitizing Attack order to None."), *Unit->GetName());
+		ClearOrder(false);
+		return;
+	}
+
 	AActor* Target = CurrentOrderPayload.AttackTarget.Get();
-	if (!Unit || !Target || !IsValid(Target))
+	if (!Target || !IsValid(Target))
 	{
 		// Target dead or invalid: combat ended.
 		ClearOrder(true);

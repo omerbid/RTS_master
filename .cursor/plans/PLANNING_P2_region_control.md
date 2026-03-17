@@ -1,8 +1,8 @@
 # Plan: P2 Region Control (0–5, Secure Action, Victory at 5)
 
 **Created**: 2026-03-08  
-**Updated**: 2026-02-21 (Phases 1–7 plan)  
-**Status**: Phases 1–4 complete; Phases 5–7 remaining (Input, UI, Polish). See `PLANNING_P2_phases_1_7.md`.  
+**Updated**: 2026-03-07 (synced with code)  
+**Status**: Phases 1–6 complete; Phase 7 partial. **Single source of truth for phase status:** `PLANNING_P2_phases_1_7.md`. Input (Secure key G), UI, Polish per PROJECT_STATUS §1. Last synced with code: 2026-03-07.  
 **GDD**: `.cursor/GDD.md` (Region Control System, Secure Region, Win/Lose, MVP Locked Values P2)
 
 **Related docs:** `PLANNING_P2_phases_1_7.md` (Phases 1–7) | `P0_P1_P2_REMAINING.md` (מה נשאר) | `P0_P1_QUICK_REFERENCE.md` | `RTS_ARCHITECTURE.md` | `PROJECT_MAP.md` | `PLANNING_P2_epics_1_2_4.md`
